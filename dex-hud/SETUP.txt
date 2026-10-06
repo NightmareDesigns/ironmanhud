@@ -7,6 +7,8 @@ BUILD AND INSTALL
 1. On GitHub, open Actions > Build Jessica DeX APK > Run workflow.
    The workflow must exist on the selected branch (manual dispatch is exposed
    once the workflow exists on the default branch).
+   If a Copilot-triggered run shows "action required", approve it in GitHub
+   before expecting a build or download. No APK exists until a run succeeds.
 2. Open the completed run and download the Jessica-DeX-APK artifact.
 3. Unzip it and copy app-debug.apk to your S23.
 4. Open it on the phone and allow installation from that source if prompted.
