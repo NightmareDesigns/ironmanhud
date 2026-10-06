@@ -1,0 +1,89 @@
+JESSICA HUD — standalone Android / Samsung DeX
+
+This native Java app does not use Unity, NRSDK or any XREAL SDK.
+The IronManHUD_Clean Unity project is left untouched.
+
+BUILD AND INSTALL
+1. On GitHub, open Actions > Build Jessica DeX APK > Run workflow.
+   The workflow must exist on the selected branch (manual dispatch is exposed
+   once the workflow exists on the default branch).
+2. Open the completed run and download the Jessica-DeX-APK artifact.
+3. Unzip it and copy app-debug.apk to your S23.
+4. Open it on the phone and allow installation from that source if prompted.
+   This is a debug-signed APK for personal testing, not a Play Store release.
+   No Unity license, signing secret or OpenRouter key is needed to build.
+
+Local build: JDK 17, Android SDK platform 35 and build-tools 35.0.0.
+From the dex-hud directory run:
+  ./gradlew :app:lintDebug :app:assembleDebug
+On Windows use gradlew.bat instead. Set ANDROID_HOME to your Android SDK.
+Output: app/build/outputs/apk/debug/app-debug.apk
+
+DEX AND CONTROLS
+Connect the XREAL display to the S23, enter Samsung DeX, then open Jessica HUD
+on the external display. Maximize the DeX window and use Fullscreen to hide
+Android system bars where DeX allows it. Escape exits app fullscreen.
+Use Samsung's "Use phone as touchpad" feature to click the visible controls;
+this app does not implement a separate remote-control service.
+The window is resizable and has no locked orientation. The control row scrolls
+horizontally in small windows. Jessica's dialog supports typed input/keyboard.
+Pause FX freezes reactor rotation but keeps the clock and battery updating.
+Matrix switches the HUD to green; it is a visual theme, not AR immersion.
+Clock and battery are real. The reactor is fictional visual decoration.
+No weather, notifications, hand tracking or eye tracking is implemented.
+
+JESSICA / OPENROUTER
+The HUD works offline. For AI, open Jessica > Settings and enter your own
+OpenRouter API key on-device. The key is held only in memory, not written to
+storage, logs, APKs or GitHub. Restarting or recreating the activity (including
+some resize/orientation transitions) requires re-entering the key.
+Only the selected model ID is saved. Never commit a key.
+Default model: openrouter/free (OpenRouter's free-model router).
+You can instead enter a currently available provider/model:free ID from
+OpenRouter's model catalog. Paid model IDs are rejected by the app.
+Free models still need an account/key; availability, quotas, provider terms
+and account restrictions can change. No unlimited access is promised.
+
+Send submits typed text. Voice opens the installed Android speech recognizer,
+then sends the recognized question to Jessica. There is no always-on mic.
+Enable spoken replies in Settings to use Android text-to-speech. The chosen
+system voice is used; a specific female voice is not guaranteed.
+Speech recognition and TTS availability depend on installed engines/languages
+and may use provider cloud services. Text input remains available if speech
+recognition is missing. No raw audio is sent to OpenRouter by this app.
+Local voice commands: "Jessica fullscreen", "Jessica matrix mode",
+"Jessica stop polling", "Jessica stop speaking".
+
+POLLING AND PRIVACY
+Enter a text prompt, select Start polling and confirm. The prompt and recent
+chat are sent after each reply with a 60-second delay. Polling never reads SMS,
+notifications, clipboard, sensors or audio. It cannot supply live information
+unless you type it in. Stop polling cancels future sends, not a request already
+submitted. Errors stop polling rather than repeatedly retrying.
+Leaving the app stops polling, cancels network work and stops speech; returning
+does not restart polling. No background monitoring or autonomous actions.
+OpenRouter and its model providers receive your prompts and recent chat.
+Chat is bounded and held only in memory; do not submit sensitive information.
+AI output is untrusted and may be inaccurate; it cannot execute app commands.
+
+DISPLAY LIMITATIONS
+This is a conventional fullscreen Android display app, not spatially anchored
+AR. Black reduces emitted light but does not hide the real world or provide
+camera passthrough. System/window chrome depends on Samsung DeX.
+Target device: S23 with Samsung DeX. Physical XREAL 1S compatibility must be
+tested on your setup; this repository cannot certify display behavior.
+Pixel desktop/external-display behavior needs separate testing; it isn't DeX.
+PC-native support is not included.
+
+PIXEL / SECONDARY-DISPLAY MODE
+No DeX clone is necessary to display a single HUD app. Connect a supported
+external display and open Display > select the glasses/display. Android's
+Presentation API draws the HUD on the external screen, leaving controls and
+Jessica chat on the phone. Live status, colors and animations update both.
+Disconnecting the display dismisses its HUD; leaving the app also closes it.
+Select Phone / current app window to stop the separate-screen HUD.
+This is generic Android support, not a verified Pixel 10 Pro XL guarantee.
+Android must expose a presentation-capable secondary display. The app cannot
+force wired video output or turn a mirrored-only connection into a separate
+display. If none appears, use the OS external desktop/mirroring mode and open
+the app there, if supported by your phone/OS/cable/glasses combination.

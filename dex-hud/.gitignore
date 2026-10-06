@@ -6,3 +6,8 @@ build
 
 # Ignore Kotlin plugin data
 .kotlin
+
+# Local SDK location and signing material
+local.properties
+*.jks
+*.keystore
