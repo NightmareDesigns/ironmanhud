@@ -4,7 +4,10 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/IronManHUD.unity
+    guid: c95958324f8c2d4438ada549b6fbd3af
   m_configObjects:
     com.unity.xr.arfoundation.simulation_settings: {fileID: 11400000, guid: 9d35196218e4a684696eb35da220061a, type: 2}
     com.unity.xr.management.loader_settings: {fileID: 11400000, guid: 753e93887c88a9b488cb4ec4b93fe50f, type: 2}
