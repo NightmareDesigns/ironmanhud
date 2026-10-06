@@ -143,6 +143,7 @@ public final class MainActivity extends Activity {
         stopPolling();
         closeExternalDisplay();
         client.cancel();
+        if (busy) updateAssistant("JESSICA STANDBY", "Request cancelled when app left the foreground.");
         if (tts != null) tts.stop();
         hud.setRunning(false);
         unregisterReceiver(batteryReceiver);
