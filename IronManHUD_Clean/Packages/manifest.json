@@ -1,0 +1,21 @@
+{
+  "dependencies": {
+    "com.unity.xr.management": "4.4.2",
+    "com.unity.xr.arfoundation": "5.1.3",
+    "com.unity.xr.arsubsystems": "4.1.3",
+    "com.unity.xr.interaction.toolkit": "2.5.3",
+    "com.unity.xr.legacyinputhelpers": "2.1.11",
+    "com.unity.render-pipelines.universal": "14.0.11",
+    "com.unity.inputsystem": "1.7.0",
+    "com.unity.textmeshpro": "3.0.6",
+    "com.unity.ugui": "1.0.0"
+  },
+  "scopedRegistries": [
+    {
+      "name": "Unity Registry",
+      "url": "https://packages.unity.com",
+      "scopes": ["com.unity"]
+    }
+  ],
+  "lock": {}
+}

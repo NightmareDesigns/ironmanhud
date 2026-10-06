@@ -1,0 +1,19 @@
+minApiLevel: 29
+targetApiLevel: 34
+targetArchitectures: ARM64
+scriptingBackend: IL2CPP
+apiCompatibilityLevel: NET_Standard_2_1
+minimumApiLevel: AndroidApiLevel29
+targetApiLevel: AndroidApiLevel34
+defaultScreenOrientation: LandscapeLeft
+useXR: 1
+renderingPath: Deferred
+colorSpace: Linear
+graphicsAPIs: [Vulkan, OpenGLES3]
+multithreadedRendering: 1
+lowOverheadMode: 1
+applicationIdentifier: com.starkindustries.ironmanhud
+bundleVersion: 1.0.0
+bundleVersionCode: 1
+productName: IronManHUD
+companyName: StarkIndustries

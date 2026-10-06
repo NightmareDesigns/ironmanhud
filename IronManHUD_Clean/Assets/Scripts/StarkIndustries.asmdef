@@ -1,0 +1,18 @@
+{
+    "name": "StarkIndustries",
+    "references": [
+        "Unity.TextMeshPro",
+        "Unity.InputSystem",
+        "Unity.UGUI",
+        "Newtonsoft.Json",
+        "DOTween",
+        "NRSDK"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": []
+}
