@@ -3,6 +3,7 @@ const { app, BrowserWindow, ipcMain, dialog, session, screen, shell } = require(
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const crypto = require('node:crypto');
+const navigation = require('./navigation').createNavigation();
 const PAGE_URL = require('node:url').pathToFileURL(path.join(__dirname, 'index.html')).href;
 const HUD_URL = require('node:url').pathToFileURL(path.join(__dirname, 'hud.html')).href;
 
@@ -54,7 +55,7 @@ function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
   if (channel === 'live-event' && ['ready', 'closed'].includes(payload.type)) publishHudStatus();
 }
-function hudStatus() {
+function hudStatus(displayOnly = false) {
   const now = Date.now();
   const levels = Object.entries(outputLevels).map(([source, value]) => ({
     source, level: now - value.time < 600 ? value.level : 0
@@ -64,7 +65,9 @@ function hudStatus() {
     provider: state.preferences.provider.toUpperCase(),
     live: live?.ready ? 'LISTENING' : live ? 'CONNECTING' : 'OFFLINE',
     modules: { clock: state.preferences.modules.clock, reactor: state.preferences.modules.reactor,
-      dots: state.preferences.modules.dots, assistant: state.preferences.modules.assistant },
+      dots: state.preferences.modules.dots, assistant: state.preferences.modules.assistant,
+      navigation: state.preferences.modules.navigation },
+    navigation: navigation.snapshot(displayOnly),
     assistantText: state.preferences.modules.assistant ? assistantText : '',
     assistantSource: state.preferences.modules.assistant ? assistantSource : 'NONE',
     assistantPending: Boolean(activeChat),
@@ -76,7 +79,7 @@ function hudStatus() {
 function publishHudStatus() {
   const value = hudStatus();
   send('hud-status', value);
-  if (hudWindow && !hudWindow.isDestroyed()) hudWindow.webContents.send('hud-status', value);
+  if (hudWindow && !hudWindow.isDestroyed()) hudWindow.webContents.send('hud-status', hudStatus(true));
 }
 function clearAssistant() {
   assistantText = '';
@@ -295,6 +298,12 @@ async function streamChat(request, operation) {
 }
 handle('initialize', () => state);
 handle('read-hud-status', payload => payload === undefined ? hudStatus() : { error: 'Invalid request.' });
+handle('navigation', value => {
+  if (!state.preferences.modules.navigation || !win.isFocused()) return { error: 'Enable Navigation in the focused PC Settings window.' };
+  const result = navigation.apply(value);
+  if (result.ok) publishHudStatus();
+  return result;
+});
 handle('clear-assistant', payload => {
   if (payload !== undefined) return { error: 'Invalid request.' };
   clearAssistant();
@@ -312,16 +321,8 @@ handle('output-level', value => {
 });
 handle('open-website', async value => {
   if (!win.isFocused() || !value) return { error: 'Use the launch button in the focused PC window.' };
-  let target;
-  if (exactObject(value, ['site']) && value.site === 'openrouter') target = new URL('https://openrouter.ai/chat');
-  else if (exactObject(value, ['site', 'destination']) && value.site === 'maps' && state.preferences.modules.navigation &&
-    text(value.destination, 240) && value.destination.trim() && !/[\x00-\x1f\x7f]/.test(value.destination)) {
-    target = new URL('https://www.google.com/maps/dir/');
-    target.searchParams.set('api', '1');
-    target.searchParams.set('destination', value.destination.trim());
-  } else return { error: 'Invalid website or destination.' };
-  if (target.protocol !== 'https:' || !['openrouter.ai', 'www.google.com'].includes(target.hostname) ||
-    target.username || target.password || target.port) return { error: 'Website rejected.' };
+  if (!exactObject(value, ['site']) || value.site !== 'openrouter') return { error: 'Invalid website.' };
+  const target = new URL('https://openrouter.ai/chat');
   await shell.openExternal(target.href);
   return { ok: true };
 });
@@ -415,7 +416,7 @@ for (const channel of ['hud-read-status', 'hud-request-close']) {
     if (payload !== undefined || !hudWindow || hudWindow.isDestroyed() ||
       event.sender !== hudWindow.webContents || event.senderFrame !== hudWindow.webContents.mainFrame ||
       event.senderFrame.url !== HUD_URL) return { error: 'Request rejected.' };
-    if (channel === 'hud-read-status') return hudStatus();
+    if (channel === 'hud-read-status') return hudStatus(true);
     closeHud();
     return { ok: true };
   });
@@ -432,6 +433,7 @@ handle('preferences', async value => {
   if (!next) return { error: 'Invalid preferences.' };
   if (state.preferences.provider !== next.provider || state.preferences.model !== next.model) stopChat();
   if (!next.modules.assistant) clearAssistant();
+  if (!next.modules.navigation) navigation.clear();
   if (!next.modules.music) outputLevels.music.level = 0;
   if (!next.speakReplies) outputLevels.speech.level = 0;
   if (!next.hudShortcuts) effectsPaused = false;
@@ -603,6 +605,10 @@ app.whenReady().then(async () => {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', event => event.preventDefault());
   win.webContents.on('will-attach-webview', event => event.preventDefault());
+  win.webContents.on('did-start-navigation', (_event, _url, _inPlace, isMainFrame) => {
+    if (isMainFrame) { navigation.clear(); publishHudStatus(); }
+  });
+  win.webContents.on('render-process-gone', () => { navigation.clear(); publishHudStatus(); });
   win.webContents.on('before-input-event', (event, input) => {
     if (input.key === 'Escape' && hudWindow) { event.preventDefault(); closeHud(); }
   });
@@ -613,11 +619,11 @@ app.whenReady().then(async () => {
   win.on('resize', keepControlsOnPrimary);
   win.on('restore', keepControlsOnPrimary);
   win.on('blur', () => stopLive('Live paused: window lost focus. Start again to resume.'));
-  win.on('close', () => closeHud());
+  win.on('close', () => { navigation.clear(); closeHud(); });
   win.on('closed', () => { stopChat(); stopLive(); win = undefined; Object.keys(keys).forEach(k => { keys[k] = ''; }); });
   await win.loadFile('index.html');
   const statusTimer = setInterval(publishHudStatus, 100);
   win.on('closed', () => clearInterval(statusTimer));
 });
 app.on('window-all-closed', () => app.quit());
-app.on('before-quit', () => { closeHud(); stopChat(); stopLive(); });
+app.on('before-quit', () => { navigation.clear(); closeHud(); stopChat(); stopLive(); });

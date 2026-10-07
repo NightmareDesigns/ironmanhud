@@ -2,11 +2,12 @@
 const $ = id => document.getElementById(id);
 let revision = 0;
 const matrix = window.createDotMatrix($('dot-matrix'));
+const renderNavigation = window.createNavigationView($('navigation-panel'));
 function renderStatus(value) {
   if (!value || !['STANDBY', 'PROCESSING', 'LIVE LINK'].includes(value.mode) ||
     !['OPENROUTER', 'GROQ', 'CEREBRAS'].includes(value.provider) ||
     !['OFFLINE', 'CONNECTING', 'LISTENING'].includes(value.live) ||
-    !value.modules || !['clock', 'reactor', 'dots', 'assistant'].every(key => typeof value.modules[key] === 'boolean') ||
+    !value.modules || !['clock', 'reactor', 'dots', 'assistant', 'navigation'].every(key => typeof value.modules[key] === 'boolean') ||
     !['SILENT', 'GEMINI', 'MUSIC', 'SPEECH'].includes(value.audioSource) ||
     !['NONE', 'CHAT', 'GEMINI'].includes(value.assistantSource) ||
     typeof value.assistantPending !== 'boolean' ||
@@ -30,6 +31,8 @@ function renderStatus(value) {
   $('dot-source').textContent = value.audioSource === 'SPEECH' ? 'CHAT / SPEECH ACTIVITY' : `OUTPUT / ${value.audioSource}`;
   $('assistant-box').classList.toggle('hidden', !value.modules.assistant);
   document.body.classList.toggle('with-assistant', value.modules.assistant);
+  document.body.classList.toggle('with-navigation', value.modules.navigation);
+  renderNavigation(value.navigation, value.modules.navigation);
   $('assistant-text').textContent = value.modules.assistant ? value.assistantText || 'Waiting for new assistant output.' : '';
   $('assistant-state').textContent = value.assistantPending ? 'RECEIVING CHAT' :
     value.assistantSource !== 'NONE' ? `${value.assistantSource} / LATEST` : value.mode === 'LIVE LINK' ? 'LIVE OUTPUT' : 'STANDBY';

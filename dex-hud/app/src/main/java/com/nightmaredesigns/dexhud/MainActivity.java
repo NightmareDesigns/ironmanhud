@@ -36,6 +36,8 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
@@ -53,6 +55,7 @@ public final class MainActivity extends Activity implements HudState.Listener {
     private static final int VOICE_REQUEST = 10;
     private static final int API_VOICE_REQUEST = 11;
     private static final int CAPTURE_REQUEST = 12, AUDIO_PERMISSIONS = 13;
+    private static final int LOCATION_PERMISSIONS = 14;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final OpenRouterClient client = new OpenRouterClient();
@@ -67,6 +70,7 @@ public final class MainActivity extends Activity implements HudState.Listener {
     private TextView chatText;
     private Button pollButton;
     private AlertDialog chatDialog;
+    private AlertDialog navigationDialog;
     private HudState state;
     private HudDisplay externalDisplay;
     private DisplayManager displays;
@@ -130,7 +134,7 @@ public final class MainActivity extends Activity implements HudState.Listener {
         button(row, "Display", v -> chooseDisplay());
         button(row, "Fullscreen", v -> { fullscreen = !fullscreen; applyFullscreen(); });
         musicButton = button(row, "Music controls", v -> openMusic());
-        navigationButton = button(row, "Navigation launcher", v -> openNavigation());
+        navigationButton = button(row, "Navigation", v -> openNavigation());
         controls.addView(row);
         root.addView(controls);
         setContentView(root);
@@ -160,6 +164,7 @@ public final class MainActivity extends Activity implements HudState.Listener {
 
     @Override protected void onStop() {
         active = false;
+        if (navigationDialog != null) navigationDialog.dismiss();
         generation++;
         stopPolling();
         externalDisplay.stop();
@@ -200,6 +205,7 @@ public final class MainActivity extends Activity implements HudState.Listener {
         externalDisplay.stop();
         if (!isChangingConfigurations()) {
             stopCapture();
+            state.navigation.stop();
             state.clearText();
         }
         apiKey = "";
@@ -276,7 +282,8 @@ public final class MainActivity extends Activity implements HudState.Listener {
         motion = state.enabled("motion", true);
         state.apply(hud);
         musicButton.setVisibility(state.enabled("music", false) ? View.VISIBLE : View.GONE);
-        navigationButton.setVisibility(state.enabled("navigation", false) ? View.VISIBLE : View.GONE);
+        navigationButton.setVisibility(state.enabled("offlineNavigation", false) ? View.VISIBLE : View.GONE);
+        if (!state.enabled("offlineNavigation", false) && navigationDialog != null) navigationDialog.dismiss();
         if (captureButton != null) {
             String title = state.capturing ? "Stop playback visualization" : "Start playback visualization";
             if (!title.contentEquals(captureButton.getText())) captureButton.setText(title);
@@ -354,7 +361,10 @@ public final class MainActivity extends Activity implements HudState.Listener {
                 + "Filtering is not a guarantee. Up to 4 items in memory, never saved, logged, "
                 + "exported or sent to AI. Text clears on disable/access loss. No SMS permission."));
         toggle(fields, "Music controls / system player launcher", "music", false);
-        toggle(fields, "Navigation launcher", "navigation", false);
+        toggle(fields, "Compass / offline navigation", "offlineNavigation", false);
+        fields.addView(label("Left HUD: phone magnetic compass and your supplied waypoint path only. "
+                + "No routing provider, street turns, map app, key or payment. Location is foreground-only; "
+                + "Navigation explains permission and memory-only coordinate use."));
         toggle(fields, "External button shortcuts (focused HUD only)", "buttonShortcuts", false);
         fields.addView(label("Tap the HUD to focus it. Delivered Android DPAD Left/Right cycles styles; "
                 + "Space/Enter/DPAD Center toggles decorative motion. Keys are not intercepted in text "
@@ -464,28 +474,102 @@ public final class MainActivity extends Activity implements HudState.Listener {
     }
 
     private void openNavigation() {
-        if (!state.enabled("navigation", false)) return;
-        EditText destination = new EditText(this);
-        destination.setHint("Destination or address");
-        destination.setSingleLine();
-        destination.setFilters(new InputFilter[]{new InputFilter.LengthFilter(300)});
-        destination.setSaveEnabled(false);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Navigation app launcher")
-                .setMessage("Opens a geo search in your chosen map app. No GPS, route telemetry "
-                        + "or turn-by-turn instructions are read or shown by this HUD.")
-                .setView(destination).setPositiveButton("Open map", null)
-                .setNegativeButton("Cancel", null).create();
+        if (!state.enabled("offlineNavigation", false)) return;
+        LinearLayout fields = column();
+        fields.setPadding(dp(16), dp(8), dp(16), dp(8));
+        fields.setSaveEnabled(false);
+        fields.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
+        fields.addView(label("Offline supplied-route following, NOT generated street directions. "
+                + "Coordinates only: no address search. Plan a safe path yourself: "
+                + "lines latitude,longitude[,label] in travel order, "
+                + "maximum 100 waypoints / 20,000 characters / 80-character labels. "
+                + "One point means direct bearing / straight line, not a road route. "
+                + "Walking/Driving only select GPS following tolerances; they do not optimize roads, "
+                + "paths, legality or safety.\n\n"
+                + "Start requests foreground location. Jessica uses Android GPS only while this activity "
+                + "is visible, never background tracking (including during playback capture). "
+                + "Precise permission is needed for GPS guidance; approximate permission can start a path "
+                + "but cannot auto-advance or provide GPS guidance. Coordinates/labels stay in process memory: "
+                + "never saved, logged or sent to a network, routing provider, chat or AI. "
+                + "Stop or disabling this module clears the path. Android/keyboard privacy settings still apply.\n\n"
+                + "Phone magnetic compass is NOT glasses pose. GPS travel course and target bearing "
+                + "are separate true-north values. No automatic road turns or off-route shortcuts. "
+                + "Do not operate controls while driving."));
+        RadioGroup modes = new RadioGroup(this);
+        RadioButton walking = new RadioButton(this), driving = new RadioButton(this);
+        walking.setId(View.generateViewId());
+        driving.setId(View.generateViewId());
+        walking.setText("Walking following tolerances");
+        driving.setText("Driving following tolerances");
+        modes.addView(walking);
+        modes.addView(driving);
+        modes.check(state.navigation.driving() ? driving.getId() : walking.getId());
+        fields.addView(modes);
+        EditText routeInput = new EditText(this);
+        routeInput.setHint("51.5007,-0.1246,Start\n51.5010,-0.1250,Next");
+        routeInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        routeInput.setMinLines(3);
+        routeInput.setMaxLines(6);
+        routeInput.setGravity(Gravity.TOP);
+        routeInput.setSaveEnabled(false);
+        routeInput.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+        if (state.navigation.route() != null) routeInput.setText(state.navigation.route().editableText());
+        fields.addView(routeInput);
+        TextView status = label(state.navigation.route() == null ? "No active route" : "Current route in left HUD");
+        fields.addView(status);
+        LinearLayout actions = row();
+        Button previous = button(actions, "Previous", v -> {
+            state.navigation.step(-1);
+            status.setText("Manual selection • see left HUD. Editor changes require Start / replace.");
+        });
+        Button next = button(actions, "Next", v -> {
+            state.navigation.step(1);
+            status.setText("Manual selection • see left HUD. Editor changes require Start / replace.");
+        });
+        previous.setEnabled(state.navigation.route() != null);
+        next.setEnabled(state.navigation.route() != null);
+        button(actions, "Stop / clear", v -> {
+            state.navigation.stop();
+            routeInput.setText("");
+            previous.setEnabled(false);
+            next.setEnabled(false);
+            status.setText("Route cleared • compass only");
+        });
+        android.widget.HorizontalScrollView actionScroll = new android.widget.HorizontalScrollView(this);
+        actionScroll.addView(actions);
+        fields.addView(actionScroll);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setSaveEnabled(false);
+        scroll.addView(fields);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Compass / offline navigation")
+                .setView(scroll).setPositiveButton("Start / replace", null)
+                .setNegativeButton("Close", null).create();
+        navigationDialog = dialog;
+        dialog.setOnDismissListener(ignored -> {
+            routeInput.setText("");
+            if (navigationDialog == dialog) navigationDialog = null;
+        });
+        dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         dialog.show();
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            if (!state.enabled("navigation", false)) { dialog.dismiss(); return; }
-            String query = destination.getText().toString().trim();
-            if (query.isEmpty()) { destination.setError("Enter a destination"); return; }
-            try {
-                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(query))));
-                dialog.dismiss();
-            } catch (ActivityNotFoundException | SecurityException exception) {
-                toast("Install or enable a map app that supports geo links.");
+            if (!active || !state.enabled("offlineNavigation", false)) { dialog.dismiss(); return; }
+            OfflineRoute supplied;
+            try { supplied = OfflineRoute.parse(routeInput.getText().toString()); }
+            catch (IllegalArgumentException exception) {
+                routeInput.setError(exception.getMessage());
+                return;
             }
+            if (!state.navigation.permitted()) {
+                status.setText("Permission requested. After granting it, tap Start / replace again.");
+                requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION}, LOCATION_PERMISSIONS);
+                return;
+            }
+            state.navigation.start(supplied, modes.getCheckedRadioButtonId() == driving.getId());
+            previous.setEnabled(state.navigation.route() != null);
+            next.setEnabled(state.navigation.route() != null);
+            status.setText("Following supplied path in left HUD. Stop clears route; Close keeps following.");
         });
     }
 
@@ -525,6 +609,11 @@ public final class MainActivity extends Activity implements HudState.Listener {
 
     @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(request, permissions, results);
+        if (request == LOCATION_PERMISSIONS) {
+            toast(state.navigation.permitted() ? "Permission granted. Tap Navigation Start to follow your path."
+                    : "Location denied. Compass still works; no route guidance started.");
+            return;
+        }
         if (request != AUDIO_PERMISSIONS) return;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)

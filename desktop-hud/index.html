@@ -6,7 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Jessica • Desktop HUD</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="navigation.css">
   <script src="dot-matrix.js" defer></script>
+  <script src="navigation-view.js" defer></script>
   <script src="renderer.js" defer></script>
 </head>
 <body>
@@ -14,6 +16,17 @@
   <main>
     <section class="stage">
       <div class="stage-label"><span>NEURAL INTERFACE</span><span id="mode">STANDBY</span></div>
+      <div class="stage-preview">
+      <aside id="navigation-panel" class="navigation-panel hidden" aria-label="Navigation preview">
+        <h2>LEFT HUD / COMPASS</h2>
+        <p data-nav="heading">HEADING UNAVAILABLE</p>
+        <p data-nav="cue">COMPASS</p>
+        <p data-nav="target"></p>
+        <p data-nav="metrics">N · E · S · W</p>
+        <canvas data-nav="sketch" width="240" height="240" aria-label="North-up schematic of supplied waypoints; white square is manual position, amber dot is target"></canvas>
+        <p data-nav="source">NO POSITION OR SENSOR</p>
+      </aside>
+      <div class="stage-visuals">
       <div class="core" id="core"><div class="orbit outer"></div><div class="orbit inner"></div><div class="reticle"></div><div class="core-text">J<span>JESSICA</span></div><div class="scanline"></div></div>
       <div class="wave" id="wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
       <section id="dot-module" class="dot-module"><canvas id="dot-matrix" width="540" height="156" aria-label="Assistant and local music output dot matrix"></canvas><p id="dot-source">OUTPUT / SILENT</p></section>
@@ -22,6 +35,8 @@
       <button id="open-settings">Open central settings</button>
       <p class="intro">Choose HUD modules, providers, Live voice, local music and navigation in Settings.</p>
       <div class="scope-note">DESKTOP EDITION / NO CAMERA / NO SPATIAL AR<br>Phone notifications and SMS are not mirrored.</div>
+      </div>
+      </div>
     </section>
     <aside class="panel">
       <nav><button class="tab selected" data-tab="chat">CONVERSATION</button><button class="tab" data-tab="settings">SETTINGS</button><button class="tab" data-tab="history">ARCHIVE</button></nav>
@@ -55,10 +70,26 @@
         <fieldset><legend>Optional PC tools / no automatic actions</legend>
           <label class="check"><input id="module-notes" type="checkbox"> Manual notes</label>
           <label class="check"><input id="module-music" type="checkbox"> Local music player</label>
-          <label class="check"><input id="module-navigation" type="checkbox"> Navigation website launcher</label>
+          <label class="check"><input id="module-navigation" type="checkbox"> Offline navigation / left HUD compass</label>
           <section id="notes-module" class="hidden"><label for="manual-notes">Session-only notes (PC only; not sent to AI or glasses)</label><textarea id="manual-notes" rows="3" maxlength="2000" placeholder="Your manual reminders…"></textarea><button id="clear-notes">Clear notes</button></section>
           <section id="music-module" class="hidden"><label for="music-files">Import local audio playlist</label><input id="music-files" type="file" multiple accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac,.webm"><label for="music-track">Track</label><select id="music-track" disabled></select><div class="tool-row"><button id="music-prev" disabled>Previous</button><button id="music-play" disabled>Play</button><button id="music-next" disabled>Next</button></div><label for="music-volume">Volume</label><input id="music-volume" type="range" min="0" max="1" step="0.05" value="0.6"><p id="music-notice" role="status">Import audio to begin. No autoplay on import.</p><p class="warning">Up to 50 files, 100 MiB each / 500 MiB total. Local playback only: cannot control Spotify or other apps. Files stay in this renderer; only a numeric output level reaches the HUD. Disabling stops playback and clears the playlist.</p></section>
-          <section id="navigation-module" class="hidden"><label for="navigation-destination">Destination (address or place)</label><input id="navigation-destination" maxlength="240" placeholder="Enter a destination"><button id="navigation-open">Open Google Maps directions</button><p class="warning">Opens your browser only after clicking. Destination is sent to Google Maps; no location capture, in-HUD turn-by-turn directions or automatic AI navigation.</p><p id="navigation-notice" role="status"></p></section>
+          <section id="navigation-module" class="hidden">
+            <p class="warning">In-app, offline, user-supplied waypoints only. No road routing, geocoding, maps provider, traffic, paid service or browser launch. Walking/Driving changes only a manual-coordinate proximity reference (10 m / 25 m), not street optimization or route legality. This does not verify arrival or advance waypoints. Straight bearings may cross unsafe or inaccessible terrain; check a real map and your surroundings.</p>
+            <label for="navigation-mode">Travel mode</label><select id="navigation-mode"><option value="walking">Walking</option><option value="driving">Driving</option></select>
+            <label for="navigation-route">Ordered waypoints — one lat,lon[,label] per line</label>
+            <textarea id="navigation-route" rows="5" maxlength="20000" spellcheck="false" autocomplete="off" placeholder="51.5007,-0.1246,First waypoint&#10;51.5014,-0.1419,Second waypoint"></textarea>
+            <p class="warning">1–100 points; 20,000 characters maximum. Decimal latitude −90…90 / longitude −180…180; optional label up to 80 characters (no commas). Session memory only; no files imported, saved, sent to chat, AI, transcripts or exports.</p>
+            <div class="tool-row"><button id="navigation-load" type="button">Load supplied route</button><button id="navigation-clear-route" type="button">Clear route</button></div>
+            <label for="navigation-latitude">Manual current latitude</label><input id="navigation-latitude" maxlength="32" inputmode="decimal" autocomplete="off" placeholder="−90 to 90">
+            <label for="navigation-longitude">Manual current longitude</label><input id="navigation-longitude" maxlength="32" inputmode="decimal" autocomplete="off" placeholder="−180 to 180">
+            <label for="navigation-heading">Optional MANUAL heading in degrees clockwise from north</label><input id="navigation-heading" maxlength="32" inputmode="decimal" autocomplete="off" placeholder="0 to less than 360; blank = unavailable">
+            <div class="tool-row"><button id="navigation-position" type="button">Set manual position</button><button id="navigation-set-heading" type="button">Set heading only</button><button id="navigation-clear-position" type="button">Clear position / heading</button></div>
+            <p class="warning">MANUAL, not live GPS or a real compass. No device location permission is requested: Electron location can require an external provider/API key. Generic PC displays do not provide Android's GPS/magnetometer sensors; there is no phone-sensor bridge. Idle heading stays unavailable unless you explicitly supply one. Updating coordinates never advances the route.</p>
+            <div class="tool-row"><button id="navigation-previous" type="button" disabled>Previous waypoint</button><button id="navigation-next" type="button" disabled>Next waypoint</button><button id="navigation-clear" type="button">Clear all navigation</button></div>
+            <label class="check"><input id="navigation-share" type="checkbox"> Share navigation cues and schematic on selected glasses HUD (session-only)</label>
+            <p class="warning">OFF by default. The PC preview shows your supplied route locally. Sharing sends only bounded derived cues, target label and a coordinate-derived sketch, not raw coordinates or input text. The glasses otherwise show idle COMPASS / HEADING UNAVAILABLE. Disabling Navigation or exiting clears the route, manual position, heading and sharing immediately.</p>
+            <p id="navigation-notice" role="status">No route loaded. Heading unavailable.</p>
+          </section>
         </fieldset>
         <section class="live-card">
           <div class="section-heading"><h2>SECOND-SCREEN HUD</h2><span>EXTEND MODE</span></div>
@@ -66,7 +97,7 @@
           <select id="hud-display"><option value="">Select a secondary display…</option></select>
           <div class="key-row"><button id="hud-show" disabled>Show HUD</button><button id="hud-close" disabled>Close HUD</button></div>
           <p id="hud-display-notice" role="status">Checking connected displays…</p>
-          <p class="warning">Windows: press Win+P and choose Extend, then identify your glasses in Display settings. No automatic XREAL detection. The black HUD receives module switches, status, numeric output level and ONLY opted-in bounded assistant output. All controls stay here. Escape closes the HUD.</p>
+          <p class="warning">Windows: press Win+P and choose Extend, then identify your glasses in Display settings. No automatic XREAL detection. The black HUD receives module switches, status, numeric output level and only separately opted-in bounded assistant output / navigation cues and sketches. All controls stay here. Escape closes the HUD.</p>
         </section>
         <section class="live-card"><div class="section-heading"><h2>LIVE VOICE</h2><span>GEMINI API</span></div>
           <label for="live-model">Live model (account availability varies)</label><input id="live-model" value="gemini-3.8-live" maxlength="160">

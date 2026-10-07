@@ -16,5 +16,5 @@ contextBridge.exposeInMainWorld('hud', Object.freeze({
   showHud: invoke('show-hud'), closeHud: invoke('close-hud'), onDisplays: subscribe('display-state'),
   readHudStatus: invoke('read-hud-status'), onHudStatus: subscribe('hud-status'),
   outputLevel: invoke('output-level'), clearAssistant: invoke('clear-assistant'), openWebsite: invoke('open-website'),
-  hudShortcut: invoke('hud-shortcut')
+  hudShortcut: invoke('hud-shortcut'), navigation: invoke('navigation')
 }));

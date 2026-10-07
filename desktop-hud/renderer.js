@@ -7,6 +7,7 @@ let microphone, captureContext, playbackContext, captureNode, liveStarting = fal
 let playbackTime = 0, playbackSources = new Set(), assistantBody;
 let playbackAnalyser, playbackSamples, speechActive = false, speechGeneration = 0;
 const matrix = window.createDotMatrix($('dot-matrix'));
+const renderNavigation = window.createNavigationView($('navigation-panel'));
 let hudRevision = 0;
 function renderHudStatus(value) {
   if (!value?.modules || !Number.isFinite(value.level) || value.level < 0 || value.level > 1 ||
@@ -26,6 +27,15 @@ function renderHudStatus(value) {
     value.assistantText || 'Waiting for a new assistant response.' : '';
   $('assistant-state').textContent = value.assistantPending ? 'RECEIVING CHAT' :
     value.assistantSource !== 'NONE' ? `${value.assistantSource} / LATEST` : value.mode === 'LIVE LINK' ? 'LIVE OUTPUT' : 'STANDBY';
+  renderNavigation(value.navigation, value.modules.navigation);
+  document.querySelector('.stage').classList.toggle('with-navigation', value.modules.navigation);
+  if (value.navigation) {
+    $('navigation-share').checked = value.navigation.shared;
+    $('navigation-mode').value = value.navigation.mode;
+    $('navigation-previous').disabled = !value.modules.navigation || !value.navigation.count || value.navigation.targetIndex === 0;
+    $('navigation-next').disabled = !value.modules.navigation || !value.navigation.count ||
+      value.navigation.targetIndex === value.navigation.count - 1;
+  }
 }
 api.onHudStatus(renderHudStatus);
 const initialHudRevision = hudRevision;
@@ -156,7 +166,7 @@ function applyModules() {
   $('shortcut-notice').textContent = preferences.hudShortcuts ? 'F8: pause/resume FX · F9: show/close selected HUD · focused PC app only.' : 'Keyboard/HID controls off.';
   for (const name of ['notes', 'music', 'navigation']) $(`${name}-module`).classList.toggle('hidden', !preferences.modules[name]);
   if (!preferences.modules.notes) $('manual-notes').value = '';
-  if (!preferences.modules.navigation) $('navigation-destination').value = '';
+  if (!preferences.modules.navigation) clearNavigationInputs();
   if (!preferences.modules.music) clearMusic();
   if (!preferences.speakReplies) stopReading();
   if (!preferences.modules.assistant) {
@@ -218,12 +228,53 @@ $('openrouter-web').addEventListener('click', async () => {
   const result = await api.openWebsite({ site: 'openrouter' });
   settingNotice(result.error || 'Opened OpenRouter in your browser. Website chat is separate from this app.');
 });
-$('navigation-open').addEventListener('click', async () => {
-  const destination = $('navigation-destination').value.trim();
-  if (!destination) { $('navigation-notice').textContent = 'Enter an address or place first.'; return; }
-  const result = await api.openWebsite({ site: 'maps', destination });
-  $('navigation-notice').textContent = result.error || 'Opened Google Maps in your browser. No directions are tracked in this app.';
+function clearNavigationInputs() {
+  for (const name of ['route', 'latitude', 'longitude', 'heading']) $('navigation-' + name).value = '';
+  $('navigation-share').checked = false;
+  $('navigation-mode').value = 'walking';
+  $('navigation-notice').textContent = 'No route loaded. Heading unavailable.';
+  renderNavigation(null, false);
+}
+async function navigationAction(payload, notice) {
+  try {
+    const result = await api.navigation(payload);
+    $('navigation-notice').textContent = result.error || notice;
+    return result.ok === true;
+  } catch {
+    $('navigation-notice').textContent = 'Navigation unavailable. Try again in the focused PC window.';
+    return false;
+  }
+}
+$('navigation-load').addEventListener('click', async () => {
+  if (await navigationAction({ action: 'route', text: $('navigation-route').value },
+    'Supplied waypoints loaded. Use Previous / Next manually; no road routing.')) $('navigation-route').value = '';
 });
+$('navigation-position').addEventListener('click', () => {
+  void navigationAction({ action: 'position', latitude: $('navigation-latitude').value.trim(),
+    longitude: $('navigation-longitude').value.trim(), heading: $('navigation-heading').value.trim() },
+  'MANUAL position / heading updated. This is not live GPS; waypoint unchanged.');
+});
+$('navigation-set-heading').addEventListener('click', () => {
+  void navigationAction({ action: 'heading', heading: $('navigation-heading').value.trim() },
+    'Manual heading updated. Blank means heading unavailable; no sensor reading.');
+});
+$('navigation-mode').addEventListener('change', () => {
+  void navigationAction({ action: 'mode', mode: $('navigation-mode').value }, 'Travel mode updated; supplied geometry is unchanged.');
+});
+$('navigation-share').addEventListener('change', () => {
+  void navigationAction({ action: 'share', enabled: $('navigation-share').checked },
+    $('navigation-share').checked ? 'Navigation display sharing enabled for this session.' : 'Glasses navigation cleared; PC preview remains local.');
+});
+for (const action of ['previous', 'next', 'clear-route', 'clear-position', 'clear']) {
+  $('navigation-' + action).addEventListener('click', async () => {
+    if (!await navigationAction({ action }, action.startsWith('clear') ? 'Navigation data cleared.' : 'Target waypoint changed manually.')) return;
+    if (action === 'clear') clearNavigationInputs();
+    if (action === 'clear-route') $('navigation-route').value = '';
+    if (action === 'clear-position') {
+      for (const name of ['latitude', 'longitude', 'heading']) $('navigation-' + name).value = '';
+    }
+  });
+}
 function stopReading() {
   speechGeneration++;
   speechActive = false;
@@ -691,6 +742,7 @@ window.addEventListener('beforeunload', () => {
   stopReading();
   clearMusic();
   matrix.destroy();
+  clearNavigationInputs();
   void musicContext?.close();
 });
 setInterval(() => { $('clock').textContent = new Date().toLocaleTimeString(); }, 1000);

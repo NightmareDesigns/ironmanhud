@@ -57,6 +57,15 @@ sharing buffers immediately; enabling does not replay earlier replies.
 New chat, provider/model changes, stopping a request and stopping Live clear
 shared output. Old/canceled requests cannot repopulate it. Output sharing
 is not saved or exported, and the HUD cannot start provider calls.
+Navigation is a separate, OFF-by-default left panel. Enabling it shows an
+idle compass with fixed N/E/S/W references, NOT a measured heading. Its
+route/position/heading sharing checkbox is separately OFF each session:
+explicit sharing sends only bounded derived navigation cues, a target label
+and a normalized coordinate-derived schematic to the selected HUD. Raw
+coordinates and route input text are never sent to that window. The assistant
+remains on the right; each independently enabled panel reserves its side
+and shifts reactor/dots to the center of the remaining area. With sharing off, the
+glasses keep COMPASS / HEADING UNAVAILABLE even if the PC has a manual route.
 
 Use Close HUD or press Escape while the PC controls are focused to exit.
 Opening the HUD does not take keyboard focus from the PC. The existing
@@ -84,7 +93,7 @@ resumes effects. Escape/Close HUD remain available regardless of opt-in.
 The Settings HUD brightness slider provides real SOFTWARE dimming from
 10% to 100%, applied when released and saved across app restarts. It adjusts
 opacity of the entire glasses content layer (clock, text, dots, reactor,
-assistant panel and footer) over a pure-black background. It does not dim
+assistant/navigation panels and footer) over a pure-black background. It does not dim
 the PC controls or change monitor backlight/hardware brightness. Reset HUD
 brightness restores this app's content opacity to the default 100% only.
 Older preferences without brightness settings migrate to 100%.
@@ -199,14 +208,66 @@ Playlists and volume are not persisted. This player does not control other
 music applications or impersonate OS media keys. Music does not record audio
 and may continue when PC controls lose focus; the Live microphone still stops.
 
-Navigation is an explicit Google Maps website launcher. Enter an address or
-place (up to 240 characters) and click Open Google Maps directions. The
-destination is sent to Google in your default browser; Jessica does not
-capture location or provide in-HUD turn-by-turn navigation. Destinations
-are session-only and are cleared when this module is disabled.
-Only fixed HTTPS OpenRouter chat and Google Maps directions URLs may be
-launched through validated, focused-PC IPC. Arbitrary URLs, shell commands,
-automatic AI tools and background navigation are not accepted.
+OFFLINE NAVIGATION / MANUAL COMPASS
+Enable Offline navigation in Settings. The PC preview gets a left panel;
+all navigation controls remain in Settings, not on glasses or in chat.
+Select Walking or Driving. This changes only the manual-coordinate proximity
+reference (10 meters Walking / 25 meters Driving): neither mode calculates
+street optimization, route legality, transport restrictions, traffic or time.
+Within/Outside reference compares supplied coordinates only, not verified
+physical arrival. It never advances a target or substitutes for live sensors.
+No maps/routing provider, subscription, API key, browser launch, network
+request, geocoding or externally generated route is used for navigation.
+
+Supply ordered waypoints, one decimal lat,lon[,label] line per point.
+Example:
+  51.5007,-0.1246,First waypoint
+  51.5014,-0.1419,Second waypoint
+Click Load supplied route. Limits: 1-100 nonblank lines, 20,000 input
+characters, latitude -90 to 90 and longitude -180 to 180, finite decimal
+values only (no hexadecimal, exponent notation, Infinity or NaN). Labels
+are optional, at most 80 characters, with no commas or control characters.
+There is no route-file importer. Successful loading clears the input box;
+the main process retains the validated route only in session memory.
+Invalid input leaves the previous route unchanged.
+
+Enter your MANUAL current latitude/longitude and optionally a MANUAL heading
+(0 to less than 360 degrees clockwise from north), then Set manual position.
+Set heading only also works without a position or route. Blank heading means
+HEADING UNAVAILABLE. MANUAL is always identified: this is not live GPS, a
+real compass sensor, a live location feed or simulated tracking.
+No device location permission is requested. Electron geolocation can depend
+on an external location provider/API key and is not used here. Generic PC
+video displays do not supply Android GPS/magnetometer sensor capabilities.
+There is no Android sensor bridge or sensor SDK. Without explicitly supplied
+heading, idle compass heading is unavailable; cardinal references are fixed.
+
+The current target shows its supplied label, cardinal bearing, straight-line
+great-circle distance from your manual position and remaining point count
+(including the current target). Without position, bearing/distance are
+unavailable. Coincident/ambiguous targets may have no meaningful bearing.
+The north-up sketch connects your supplied points with straight schematic
+lines, not roads. Amber dot: selected target; white square: manual position.
+It is not a calibrated map, street route or turn-by-turn road instruction.
+One waypoint is explicitly DIRECT BEARING / NO STREET ROUTE. Longer routes
+are SUPPLIED WAYPOINTS / NO STREET ROUTE. Bearings can cross unsafe terrain,
+private land or obstacles. Check a real map and surroundings; do not interact
+while driving. No safety, accessibility or navigability guarantee is made.
+
+Previous/Next selects the target manually; updating position NEVER advances
+the route, including when near a waypoint. No arrival detection or rerouting.
+Clear route retains manual position/heading; Clear position / heading retains
+the route. Clear all resets route, position, heading, mode and HUD sharing.
+Disable Navigation, reload/lose the PC renderer or exit to clear all session
+navigation data. Module visibility persists, but route data, manual coordinates,
+heading, travel mode and display-sharing consent are never persisted.
+Navigation does not enter AI requests, chat history, input transcripts,
+assistant output or exports. Only the separately opted-in HUD snapshot exposes
+derived cues/sketches; that display cannot edit navigation or launch requests.
+
+The only external website launcher is fixed HTTPS OpenRouter chat, through
+validated, focused-PC IPC. Navigation cannot accept URLs, shell commands,
+automatic AI tools, arbitrary server requests or background location capture.
 
 SCOPE AND LIMITS
 The message side panel shows conversations and LOCAL application notices.
@@ -217,7 +278,7 @@ integration is implemented. PC controls and an optional display-only HUD
 are conventional desktop windows, not spatially tracked overlays.
 No background microphone, arbitrary remote URLs, in-HUD website popups,
 plugins or automatic tool execution are allowed. External browser launch is
-limited to the two explicit, allowlisted Settings buttons described above.
+limited to the explicit, allowlisted OpenRouter Settings button described above.
 Network requests have timeouts and bounded responses/audio queues.
 Provider errors are sanitized: check your account console for account details.
 Never paste your API key into a chat message or transcript.
@@ -230,6 +291,8 @@ VALIDATION
   node --check hud-preload.js
   node --check hud.js
   node --check dot-matrix.js
+  node --check navigation.js
+  node --check navigation-view.js
   npm audit
   npm run package:win
 Live authenticated provider calls require your own accounts and are not
@@ -242,7 +305,12 @@ Also verify module persistence/migration; side-box opt-in/off clearing;
 no replay of archive/user/input transcription; canceled-request/provider
 reset races; PCM/silence/interruption dot levels; available system voices;
 local music codecs, playlist replacement/limits, volume and URL cleanup;
-and explicit browser launches without arbitrary URL or command execution.
+and the OpenRouter browser launch without arbitrary URL or command execution.
+Verify navigation disabled/default, idle heading unavailable, manual cardinal
+headings, coordinate/label/count/input limits, dateline/coincident bearings,
+single-point disclosure, mode labels, schematic/current target display,
+manual-only Previous/Next, no automatic advance, per-session HUD sharing,
+no navigation in AI/chat/history/exports, and disable/reload/exit clearing.
 For optional HID/keyboard controls verify F8/F9 only with focused PC controls,
 no interception in text inputs or native/browser dialogs, no repeats/modifiers,
 no effect while another app has focus, and no HUD focus-steal on F9 opening.

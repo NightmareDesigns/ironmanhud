@@ -6,7 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Jessica • HUD-only</title>
   <link rel="stylesheet" href="hud.css">
+  <link rel="stylesheet" href="navigation.css">
   <script src="dot-matrix.js" defer></script>
+  <script src="navigation-view.js" defer></script>
   <script src="hud.js" defer></script>
 </head>
 <body>
@@ -18,6 +20,15 @@
     <p id="mode">STANDBY</p>
     <div class="status"><div><b id="provider">OFFLINE</b><span>CHAT UPLINK</span></div><div><b id="live">OFFLINE</b><span>VOICE CHANNEL</span></div></div>
   </main>
+  <aside id="navigation-panel" class="navigation-panel hidden" aria-label="Left navigation HUD">
+    <h2>LEFT HUD / COMPASS</h2>
+    <p data-nav="heading">HEADING UNAVAILABLE</p>
+    <p data-nav="cue">COMPASS</p>
+    <p data-nav="target"></p>
+    <p data-nav="metrics">N · E · S · W</p>
+    <canvas data-nav="sketch" width="240" height="240" aria-label="North-up schematic of supplied waypoints; white square is manual position, amber dot is target"></canvas>
+    <p data-nav="source">NO POSITION OR SENSOR</p>
+  </aside>
   <aside id="assistant-box" class="hidden"><h2>ASSISTANT SIDE CHANNEL</h2><p id="assistant-text"></p><small id="assistant-state">STANDBY</small><p class="disclosure">NEW OUTPUT ONLY / NO NOTIFICATION OR SMS MIRROR</p></aside>
   <footer>CONTROLS ON PC / ESC TO EXIT / NO AUDIO CAPTURE</footer>
   </div>

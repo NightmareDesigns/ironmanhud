@@ -14,8 +14,10 @@ final class HudState {
     interface Listener { void onHudChanged(); }
     private static HudState instance;
     final SharedPreferences settings;
+    final NavigationController navigation;
     private final Context context;
     private final ArrayList<Listener> listeners = new ArrayList<>();
+    private final ArrayList<HudView> activeHuds = new ArrayList<>();
     private final ArrayList<Runnable> textCleanups = new ArrayList<>();
     private boolean batteryRegistered;
     int battery = -1;
@@ -46,6 +48,7 @@ final class HudState {
     private HudState(Context context) {
         this.context = context;
         settings = context.getSharedPreferences("hud_settings", Context.MODE_PRIVATE);
+        navigation = new NavigationController(context, this);
     }
 
     boolean enabled(String key, boolean fallback) { return settings.getBoolean(key, fallback); }
@@ -53,20 +56,37 @@ final class HudState {
 
     void add(Listener listener) {
         if (!listeners.contains(listener)) listeners.add(listener);
-        updateBattery();
+        updateModules();
         listener.onHudChanged();
     }
 
     void remove(Listener listener) {
         listeners.remove(listener);
-        updateBattery();
+        updateModules();
+        changed();
     }
 
     void settingsChanged() {
         if (!enabled("notifications", false)) notifications = "";
         if (!enabled("dots", true)) ttsSpeaking = false;
-        updateBattery();
+        updateModules();
         changed();
+    }
+
+    void hudRunning(HudView view, boolean running) {
+        if (running) {
+            if (!activeHuds.contains(view)) activeHuds.add(view);
+        } else activeHuds.remove(view);
+        updateModules();
+    }
+
+    private void updateModules() {
+        updateBattery();
+        boolean activityVisible = false;
+        for (Listener listener : listeners) {
+            if (listener instanceof MainActivity) activityVisible = true;
+        }
+        navigation.update(!activeHuds.isEmpty(), activityVisible);
     }
 
     void changed() {
@@ -107,6 +127,7 @@ final class HudState {
         view.setAssistant(assistantStatus, reply);
         view.setNotifications(notifications);
         view.setAudio(audioLevel, capturing, ttsSpeaking, audioStatus);
+        view.setNavigation(enabled("offlineNavigation", false), navigation.snapshot());
     }
 
     private void updateBattery() {

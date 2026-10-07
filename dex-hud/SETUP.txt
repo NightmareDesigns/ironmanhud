@@ -42,8 +42,8 @@ capture-service Presentation on the same selected display at the same time.
 
 CENTRAL HUD SETTINGS
 HUD Settings controls clock/date, battery, reactor decoration, style, Matrix
-rain, animation, AI reply panel, digital dots, notifications, music, the
-navigation launcher, external button shortcuts and HUD content brightness.
+rain, animation, AI reply panel, digital dots, notifications, music,
+Compass / offline navigation, external button shortcuts and HUD content brightness.
 Choices are saved and apply to both HUDs.
 Notification, music and navigation modules default OFF. Playback capture also
 starts OFF and is never automatically restarted or saved as enabled.
@@ -129,18 +129,96 @@ cache; disable, clear, listener disconnection/access revocation or process exit
 clears it. Disabling unbinds the listener; enabling requires the module AND
 system access. Revoke access in Android settings whenever desired.
 
-MUSIC AND NAVIGATION — MANUAL LAUNCHERS
+MUSIC CONTROLS — MANUAL PLAYER LAUNCHER
 Enable Music controls to reveal its phone control. Open system music app uses
 Android's music-app selector; some phones have no default music app, in which
 case open your preferred player yourself. Previous / Play-pause / Next dispatch
 public Android system media keys. A running player/session is needed and the
 player decides whether it responds. No track metadata, notification access,
 media-session monitoring or automatic music detection is claimed.
-Enable Navigation launcher, enter an address/destination (maximum 300
-characters), then Open map sends an encoded geo ACTION_VIEW search to a map
-app. Pick a route and start navigation inside that app. Jessica requests no
-location permission, does not read GPS/routes and does not display real
-turn-by-turn telemetry. A geo-capable installed map app is required.
+
+COMPASS / OFFLINE NAVIGATION — INSIDE THE LEFT HUD
+Enable Compass / offline navigation in HUD Settings (default OFF). This replaces
+the old external map launcher entirely: no geo intent, map app, paid service,
+API key, routing provider or generated street turns. The idle left panel shows
+North/East/West/etc from Android TYPE_ROTATION_VECTOR when reliable. It reports
+PHONE screen-up orientation relative to MAGNETIC north, not glasses/head pose.
+Each HUD remaps the sensor axes to its own display rotation, including secondary
+displays. Missing/stale/unreliable sensors show a status, never a guessed cardinal.
+Hold the phone flatter and calibrate away from magnets if requested. True-north
+GPS travel course, when sufficiently fast and accurate, is separately labelled;
+it never replaces the magnetic compass or becomes the bearing to the target.
+
+Navigation opens a native in-app editor. Choose Walking or Driving and paste
+your own planned, ordered waypoint path, one line per point. These are GPS
+following tolerance modes ONLY: they do not optimize roads/paths, determine
+walking/driving legality or certify safety. The editor accepts planned
+coordinates, NOT address search:
+  latitude,longitude[,label]
+For example (illustrative points only, not a verified safe street route):
+  51.5007,-0.1246,Start
+  51.5010,-0.1250,Next
+  51.5014,-0.1253,Finish
+Up to 100 points / 20,000 characters; labels up to 80 characters. Blank lines
+are ignored. Non-finite numbers, latitude outside [-90,90], longitude outside
+[-180,180], malformed lines and oversized input produce explicit errors. There
+is no geocoding, GPX import, map download or path generation. A single waypoint
+is explicitly direct bearing / straight line, NOT a road or walking route.
+Two or more points display the supplied path sketch in the LEFT HUD, with the
+current point highlighted, label, target bearing (true north), distance estimate
+and count after the current waypoint. The sketch safely unwraps the date line;
+it is a schematic of supplied coordinates, not street/cartographic data.
+The left panel is independent of the assistant/notification switches; switching
+both right-side panels off leaves navigation on the left and expands the shifted
+graphics area to its right, rather than overlaying compass text on the reactor.
+Center reactor/dots and right assistant/notifications remain separate. Narrow
+or portrait windows stack the panels; swipe vertically or use the mouse wheel when content
+exceeds the window (scroll indicator at the right). Navigation text wraps rather
+than clipping. HUD brightness dims these panels together over black.
+
+Start / replace asks for foreground fine/coarse location permission. After
+granting permission, tap Start / replace again. Denial leaves compass-only idle
+available. Approximate-only permission can start the supplied path but cannot
+provide GPS guidance or automatic advance: enable precise permission in Android
+app settings if desired. Only the Android GPS provider is requested; no network
+location provider. Coordinates and labels are process-memory-only: Jessica never
+saves/logs them or sends them to a network, routing provider, AI or chat. Editor
+saved state/autofill and screenshots are disabled; keyboard/OS privacy settings
+remain outside Jessica's control. Start replaces the previous route. Close keeps
+following; Stop / clear erases route and editor. Disable also erases the route.
+Unstarted editor text is discarded when closed/backgrounded; process exit loses
+all route data. No navigation information enters assistant request history.
+
+Guidance requires a fresh (at most 8 seconds old) precise GPS fix with reported
+accuracy <=50 m walking / <=100 m driving; otherwise distance, bearing, course
+and arrival guidance are withheld. Automatic advance is intentionally stricter:
+non-mock GPS, accuracy <=12 m walking / <=20 m driving, and distance + accuracy
+within a 15 m walking / 30 m driving radius, for at least three distinct fixes
+over >=3 seconds walking / >=2 seconds driving. It advances at most one point
+per fix, then requires a new dwell. Coarse, stale, inaccurate, out-of-order or
+duplicate fixes cannot run through the path. This is an estimate, not guaranteed
+arrival. Previous/Next work only with a current route and reset the arrival dwell.
+There are no automatic street turns, off-route shortcuts or route recalculations.
+Supply enough points for your planned path, obey real-world roads/signs, and
+never operate controls while driving. This is not a safety/navigation appliance.
+
+GPS stops as soon as the HUD activity is no longer visible, including when a
+playback-capture service keeps the external HUD showing. That service has ONLY
+mediaProjection foreground type, NOT location. The left panel says GPS paused
+in background, with no stale bearing/distance/arrival. Returning resumes only
+with the module enabled, an active route and precise permission. Revocation,
+disabled GPS and stale fixes pause guidance. Magnetic sensors can remain active
+for a selected service-owned HUD; all sensors/location listeners stop when the
+module is disabled or there is no active HUD. No background-location permission
+or location foreground service is requested or claimed.
+
+Offline parser/geometry/arrival regression checks use the existing JDK, without
+adding a test framework or dependencies. From dex-hud:
+  mkdir -p app/build/offline-tests
+  javac -d app/build/offline-tests app/src/main/java/com/nightmaredesigns/dexhud/OfflineRoute.java app/src/test/java/com/nightmaredesigns/dexhud/OfflineRouteTest.java
+  java -cp app/build/offline-tests com.nightmaredesigns.dexhud.OfflineRouteTest
+These JVM checks do not simulate Android permissions, lifecycle, sensors,
+display rotations or real GPS. Use the device checklist below for those.
 
 JESSICA / GEMINI LIVE — NO GEMINI API KEY
 The HUD works offline. Jessica > Open Gemini, or Gemini / Live in the control
@@ -297,8 +375,24 @@ On Pixel 10 Pro XL and S23:
    immediate module-disable clearing. Revoke access while HUD is visible and
    while Gemini is open; verify all notification text clears.
 6. Enable music, open a player and check media-key actions; no player should
-   produce no fictional metadata. Enable navigation and test a destination with
-   spaces/Unicode; verify only a map search opens. Test missing-app handling.
+   produce no fictional metadata. Enable Compass / offline navigation on both
+   Pixel and S23: test idle cardinal against phone orientation, all four phone
+   and external display rotations, magnets/poor calibration and unavailable
+   sensors. No target bearing should masquerade as magnetic heading.
+   Paste walking/driving paths; reject NaN/Infinity/out-of-range/malformed input,
+   >100 points and >20k characters with explicit errors. Check single-point
+   direct-bearing wording, multi-point sketch, wrapped labels and portrait scroll.
+   Switch assistant and notifications independently on/off: navigation must stay
+   left, graphics must remain separate, and disabling both right panels should
+   expand graphics without moving/covering navigation. Test duplicate points and
+   paths crossing +/-180 longitude; no unsafe drawing or street map claims.
+   Deny permission, allow approximate, then allow precise: no coarse auto-advance.
+   Test Previous/Next/Stop, module disable, GPS disable/stale fixes, revoke while
+   visible, and background/return with AND without playback capture. Background
+   service HUD must say paused with no stale bearing/course/arrival. Check
+   brightness, no map launcher, no route persistence/network/chat/log output.
+   Actual GPS arrival thresholds, course and magnetic calibration need outdoor
+   device testing; mock fixes must never automatically advance.
 7. Confirm OpenRouter web works without a key entered in Jessica. Optional API
    still requires authentication. Check an API reply wraps in the side box,
    manual paste is labelled, and spoken API replies use timing-only dots when

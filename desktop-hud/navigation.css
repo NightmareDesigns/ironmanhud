@@ -1,0 +1,6 @@
+.navigation-panel{border:1px solid #315b66;border-right:3px solid #66eaff;padding:12px;color:#66eaff;font-family:Consolas,monospace;min-width:0;align-self:start}
+.navigation-panel h2{font-size:11px;letter-spacing:1px;color:#66eaff;margin:0 0 12px}
+.navigation-panel p{font-size:10px;line-height:1.6;white-space:pre-line;overflow-wrap:anywhere;margin:10px 0}
+.navigation-panel [data-nav="heading"]{font-size:13px;font-weight:bold}
+.navigation-panel [data-nav="sketch"]{display:block;width:100%;height:auto;margin-top:12px}
+.navigation-panel [data-nav="source"]{font-size:8px;opacity:.8}
