@@ -9,6 +9,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
 import android.hardware.display.DisplayManager;
 import android.os.BatteryManager;
 import android.os.Bundle;
@@ -42,6 +44,7 @@ import java.util.concurrent.Executors;
 
 public final class MainActivity extends Activity {
     private static final int VOICE_REQUEST = 10;
+    private static final int API_VOICE_REQUEST = 11;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final OpenRouterClient client = new OpenRouterClient();
@@ -52,7 +55,7 @@ public final class MainActivity extends Activity {
     private volatile boolean active;
     private volatile int generation;
     private String apiKey = "", model = "openrouter/free", pollingPrompt = "";
-    private String transcript = "Jessica ready. Configure OpenRouter to chat.\n";
+    private String transcript = "Optional OpenRouter API chat. Free models still require an OpenRouter key.\n";
     private TextView chatText;
     private Button pollButton;
     private AlertDialog chatDialog;
@@ -61,9 +64,11 @@ public final class MainActivity extends Activity {
     private DisplayManager displays;
     private int batteryPercent = -1;
     private boolean plugged, motion = true, green;
+    private int hudStyle = HudView.STYLE_MINIMAL;
     private String assistantStatus = "JESSICA STANDBY";
-    private String assistantReply = "Open Jessica to configure free-model chat.";
+    private String assistantReply = "Open Jessica to launch Gemini. Start Live inside the Gemini app.";
     private String pendingVoice;
+    private boolean pendingVoiceForApi;
 
     private final Runnable poll = () -> {
         if (active && polling && !busy) sendPrompt(pollingPrompt);
@@ -83,6 +88,14 @@ public final class MainActivity extends Activity {
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         model = getPreferences(MODE_PRIVATE).getString("model", "openrouter/free");
+        hudStyle = getPreferences(MODE_PRIVATE).getInt("hudStyle", HudView.STYLE_MINIMAL);
+        if (hudStyle < HudView.STYLE_MINIMAL || hudStyle > HudView.STYLE_TERMINAL) {
+            hudStyle = HudView.STYLE_MINIMAL;
+        }
+        green = getPreferences(MODE_PRIVATE).getBoolean("matrix", false);
+        motion = getPreferences(MODE_PRIVATE).getBoolean("motion", true);
+        getWindow().setStatusBarColor(Color.BLACK);
+        getWindow().setNavigationBarColor(Color.BLACK);
         LinearLayout root = column();
         root.setBackgroundColor(Color.BLACK);
         root.setPadding(dp(12), 0, dp(12), 0);
@@ -99,22 +112,26 @@ public final class MainActivity extends Activity {
         title.setPadding(dp(8), dp(8), dp(8), dp(8));
         root.addView(title);
         hud = new HudView(this);
+        hud.setAssistant(assistantStatus, assistantReply);
+        hud.setModes(motion, green, hudStyle);
         root.addView(hud, new LinearLayout.LayoutParams(-1, 0, 1));
         android.widget.HorizontalScrollView controls = new android.widget.HorizontalScrollView(this);
         LinearLayout row = row();
         button(row, "Jessica", v -> openJessica());
-        button(row, "Voice", v -> recognize());
+        button(row, "Gemini / Live", v -> launchGemini());
+        button(row, "HUD voice", v -> recognize());
         button(row, "Display", v -> chooseDisplay());
+        button(row, "Style", v -> chooseStyle());
         button(row, "Fullscreen", v -> { fullscreen = !fullscreen; applyFullscreen(); });
-        button(row, "Pause FX", v -> {
+        button(row, motion ? "Pause FX" : "Resume FX", v -> {
             motion = !motion;
             updateModes();
             ((Button) v).setText(motion ? "Pause FX" : "Resume FX");
         });
-        button(row, "Matrix", v -> {
+        button(row, green ? "Matrix off" : "Matrix rain", v -> {
             green = !green;
             updateModes();
-            ((Button) v).setText(green ? "Cyan HUD" : "Matrix");
+            ((Button) v).setText(green ? "Matrix off" : "Matrix rain");
         });
         controls.addView(row);
         root.addView(controls);
@@ -155,7 +172,7 @@ public final class MainActivity extends Activity {
         if (pendingVoice != null) {
             String prompt = pendingVoice;
             pendingVoice = null;
-            handleVoice(prompt);
+            handleVoice(prompt, pendingVoiceForApi);
         }
     }
 
@@ -203,7 +220,7 @@ public final class MainActivity extends Activity {
                         HudView view = new HudView(presentation.getContext());
                         view.setBattery(batteryPercent, plugged);
                         view.setAssistant(assistantStatus, assistantReply);
-                        view.setModes(motion, green);
+                        view.setModes(motion, green, hudStyle);
                         presentation.setContentView(view);
                         presentation.setOnDismissListener(closed -> {
                             view.setRunning(false);
@@ -213,6 +230,8 @@ public final class MainActivity extends Activity {
                             }
                         });
                         presentation.show();
+                        presentation.getWindow().setBackgroundDrawableResource(android.R.color.black);
+                        presentation.getWindow().setNavigationBarColor(Color.BLACK);
                         view.setRunning(true);
                         externalPresentation = presentation;
                         externalHud = view;
@@ -232,8 +251,20 @@ public final class MainActivity extends Activity {
     }
 
     private void updateModes() {
-        hud.setModes(motion, green);
-        if (externalHud != null) externalHud.setModes(motion, green);
+        hud.setModes(motion, green, hudStyle);
+        if (externalHud != null) externalHud.setModes(motion, green, hudStyle);
+        getPreferences(MODE_PRIVATE).edit().putInt("hudStyle", hudStyle)
+                .putBoolean("matrix", green).putBoolean("motion", motion).apply();
+    }
+
+    private void chooseStyle() {
+        new AlertDialog.Builder(this).setTitle("Black-background HUD style")
+                .setSingleChoiceItems(new String[]{"Minimal / border only", "Reactor / rings",
+                        "Terminal / text only"}, hudStyle, (dialog, item) -> {
+                    hudStyle = item;
+                    updateModes();
+                    dialog.dismiss();
+                }).setNegativeButton("Cancel", null).show();
     }
 
     private void updateAssistant(String status, String reply) {
@@ -253,10 +284,62 @@ public final class MainActivity extends Activity {
     }
 
     private void openJessica() {
+        new AlertDialog.Builder(this).setTitle("Jessica / assistant")
+                .setMessage("No Gemini API key needed: open your installed Gemini app, then tap Live there. "
+                        + "Jessica cannot embed Live, start its microphone or read its replies. "
+                        + "Google sign-in and device/account availability still apply.\n\n"
+                        + "OpenRouter web chat needs no API key in Jessica. Its free-model API does require a key.")
+                .setPositiveButton("Open Gemini", (dialog, which) -> launchGemini())
+                .setNeutralButton("OpenRouter web", (dialog, which) -> openOpenRouterWeb())
+                .setNegativeButton("Optional API chat", (dialog, which) -> openOpenRouterChat()).show();
+    }
+
+    private void launchGemini() {
+        stopPolling();
+        if (tts != null) tts.stop();
+        Intent intent = getPackageManager().getLaunchIntentForPackage("com.google.android.apps.bard");
+        if (intent == null) {
+            new AlertDialog.Builder(this).setTitle("Gemini app not available")
+                    .setMessage("Install or enable Google's Gemini app on your S23 and set it as your "
+                            + "mobile assistant. You can also launch your configured assistant with the phone's "
+                            + "side button or gesture. Start Live inside Gemini; Jessica has no Live API connection.")
+                    .setPositiveButton("Phone assistant", (dialog, which) -> launchPhoneAssistant())
+                    .setNegativeButton("Close", null).show();
+            return;
+        }
+        try {
+            startActivity(intent);
+        } catch (ActivityNotFoundException | SecurityException exception) {
+            toast("Unable to open Gemini. Open it from your phone and tap Live.");
+        }
+    }
+
+    private void launchPhoneAssistant() {
+        stopPolling();
+        if (tts != null) tts.stop();
+        try {
+            startActivity(new Intent(Intent.ACTION_VOICE_COMMAND));
+        } catch (ActivityNotFoundException | SecurityException exception) {
+            toast("Use your phone's assistant gesture or side button. Set Gemini as your default assistant first.");
+        }
+    }
+
+    private void openOpenRouterWeb() {
+        stopPolling();
+        if (tts != null) tts.stop();
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://openrouter.ai/chat")));
+        } catch (ActivityNotFoundException | SecurityException exception) {
+            toast("No browser available. Open openrouter.ai/chat on your phone.");
+        }
+    }
+
+    private void openOpenRouterChat() {
         if (chatDialog != null && chatDialog.isShowing()) return;
         LinearLayout content = column();
         content.setPadding(dp(16), dp(8), dp(16), dp(8));
-        content.addView(label("Text is sent to OpenRouter/model providers. Voice uses your installed speech service."));
+        content.addView(label("Optional API chat requires an OpenRouter key, even for free models. "
+                + "Text goes to OpenRouter/model providers; this is not Gemini Live."));
         chatText = label(transcript);
         chatText.setTextIsSelectable(true);
         ScrollView messages = new ScrollView(this);
@@ -274,7 +357,7 @@ public final class MainActivity extends Activity {
                 sendPrompt(input.getText().toString());
             }
         });
-        button(actions, "Voice", v -> recognize());
+        button(actions, "API voice", v -> recognize(true));
         button(actions, "Settings", v -> openSettings());
         android.widget.HorizontalScrollView actionScroll = new android.widget.HorizontalScrollView(this);
         actionScroll.addView(actions);
@@ -300,7 +383,7 @@ public final class MainActivity extends Activity {
         content.addView(pollButton);
         ScrollView scroll = new ScrollView(this);
         scroll.addView(content);
-        chatDialog = new AlertDialog.Builder(this).setTitle("Jessica")
+        chatDialog = new AlertDialog.Builder(this).setTitle("Jessica / optional OpenRouter API")
                 .setView(scroll).setPositiveButton("Close", null).create();
         chatDialog.setOnDismissListener(dialog -> { chatText = null; pollButton = null; });
         chatDialog.show();
@@ -353,13 +436,19 @@ public final class MainActivity extends Activity {
     }
 
     private void recognize() {
+        recognize(false);
+    }
+
+    private void recognize(boolean apiChat) {
         if (busy) { toast("Wait for Jessica's current reply before using Voice."); return; }
         stopPolling();
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Ask Jessica. Speech may be processed by your speech provider.");
+        intent.putExtra(RecognizerIntent.EXTRA_PROMPT, apiChat
+                ? "Ask Jessica via OpenRouter. Speech may be processed by your speech provider."
+                : "Jessica HUD command. Other questions open Gemini; speech may be processed by your speech provider.");
         try {
-            startActivityForResult(intent, VOICE_REQUEST);
+            startActivityForResult(intent, apiChat ? API_VOICE_REQUEST : VOICE_REQUEST);
         } catch (ActivityNotFoundException exception) {
             toast("No speech recognition app installed. Use Jessica's text input.");
         }
@@ -367,22 +456,34 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
-        if (request != VOICE_REQUEST || result != RESULT_OK || data == null) return;
+        if ((request != VOICE_REQUEST && request != API_VOICE_REQUEST)
+                || result != RESULT_OK || data == null) return;
         ArrayList<String> results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
         if (results == null || results.isEmpty()) return;
         String prompt = results.get(0);
-        if (!active) { pendingVoice = prompt; return; }
-        handleVoice(prompt);
+        if (!active) {
+            pendingVoice = prompt;
+            pendingVoiceForApi = request == API_VOICE_REQUEST;
+            return;
+        }
+        handleVoice(prompt, request == API_VOICE_REQUEST);
     }
 
-    private void handleVoice(String prompt) {
+    private void handleVoice(String prompt, boolean apiChat) {
         String command = prompt.toLowerCase(Locale.ROOT).replaceFirst("^jessica[, ]*", "").trim();
         switch (command) {
             case "matrix mode": green = true; updateModes(); break;
             case "fullscreen": fullscreen = true; applyFullscreen(); break;
             case "stop polling": stopPolling(); break;
             case "stop speaking": if (tts != null) tts.stop(); break;
-            default: sendPrompt(prompt);
+            case "gemini":
+            case "gemini live": launchGemini(); break;
+            default:
+                if (apiChat) sendPrompt(prompt);
+                else {
+                    toast("Ask your question inside Gemini. HUD voice does not send it to Gemini.");
+                    launchGemini();
+                }
         }
     }
 
@@ -479,6 +580,13 @@ public final class MainActivity extends Activity {
     private void button(LinearLayout row, String title, View.OnClickListener listener) {
         Button button = new Button(this);
         button.setText(title);
+        button.setTextColor(Color.rgb(90, 225, 255));
+        GradientDrawable outline = new GradientDrawable();
+        outline.setColor(Color.BLACK);
+        outline.setStroke(dp(1), Color.rgb(40, 100, 110));
+        outline.setCornerRadius(dp(4));
+        button.setBackgroundTintList(null);
+        button.setBackground(outline);
         button.setOnClickListener(listener);
         row.addView(button);
     }

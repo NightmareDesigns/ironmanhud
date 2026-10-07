@@ -29,13 +29,37 @@ Use Samsung's "Use phone as touchpad" feature to click the visible controls;
 this app does not implement a separate remote-control service.
 The window is resizable and has no locked orientation. The control row scrolls
 horizontally in small windows. Jessica's dialog supports typed input/keyboard.
-Pause FX freezes reactor rotation but keeps the clock and battery updating.
-Matrix switches the HUD to green; it is a visual theme, not AR immersion.
+The default Minimal style uses a pure-black background with a thin border.
+Style also offers Reactor (outline rings, no glow) and Terminal (text only).
+Matrix rain adds faint green falling code over black to any style; it is off
+by default. Toggle it off for the clearest glasses view. Pause FX freezes both
+the rings and code while keeping the clock and battery updating. Style, Matrix
+and motion choices are saved and applied to the phone and secondary HUD.
 Clock and battery are real. The reactor is fictional visual decoration.
 No weather, notifications, hand tracking or eye tracking is implemented.
 
-JESSICA / OPENROUTER
-The HUD works offline. For AI, open Jessica > Settings and enter your own
+JESSICA / GEMINI LIVE — NO GEMINI API KEY
+The HUD works offline. Jessica > Open Gemini, or Gemini / Live in the control
+row, launches Google's installed Gemini app on your S23 without an API key.
+Start Live using the Live control inside Gemini. Google sign-in, supported
+account/device/language and internet availability are governed by Google.
+If Gemini cannot be opened, Jessica shows instructions instead of asking for
+a key. Install/enable Gemini or use Phone assistant to invoke your configured
+assistant (which may be Bixby/another assistant unless Gemini is the default).
+Your phone's assistant gesture/side button is also available.
+This is an app handoff, NOT embedded Gemini Live or an on-device AI model.
+There is no supported Live-session bridge implemented here: Jessica cannot
+automatically start Live, access its microphone, send it HUD/chat text or
+display its replies. Gemini controls its own screen, audio and privacy.
+Opening another app stops Jessica polling and speech and may close a separate
+HUD when Android stops Jessica's activity. Return to Jessica and reselect
+Display if needed; an always-visible overlay during Gemini Live is not provided.
+
+JESSICA / OPENROUTER — OPTIONAL
+Jessica > OpenRouter web opens https://openrouter.ai/chat in your browser.
+No API key is entered in Jessica for that route; website sign-in, model
+availability and free-tier limits still apply. No HUD text or chat is forwarded.
+For in-HUD API chat, open Jessica > Optional API chat > Settings and enter your own
 OpenRouter API key on-device. The key is held only in memory, not written to
 storage, logs, APKs or GitHub. Restarting or recreating the activity (including
 some resize/orientation transitions) requires re-entering the key.
@@ -43,21 +67,25 @@ Only the selected model ID is saved. Never commit a key.
 Default model: openrouter/free (OpenRouter's free-model router).
 You can instead enter a currently available provider/model:free ID from
 OpenRouter's model catalog. Paid model IDs are rejected by the app.
-Free models still need an account/key; availability, quotas, provider terms
+Free models on the API still need an account/key; availability, quotas, provider terms
 and account restrictions can change. No unlimited access is promised.
 
-Send submits typed text. Voice opens the installed Android speech recognizer,
-then sends the recognized question to Jessica. There is no always-on mic.
+Send submits typed text in optional API chat. API voice in that dialog opens
+the installed Android speech recognizer, then sends the recognized question
+to OpenRouter (or asks for its key). HUD voice in the main controls is for local
+commands; other questions launch Gemini but are NOT forwarded. Ask them again
+inside Gemini. Neither voice route is Gemini Live. There is no always-on mic.
 Enable spoken replies in Settings to use Android text-to-speech. The chosen
 system voice is used; a specific female voice is not guaranteed.
 Speech recognition and TTS availability depend on installed engines/languages
 and may use provider cloud services. Text input remains available if speech
 recognition is missing. No raw audio is sent to OpenRouter by this app.
 Local voice commands: "Jessica fullscreen", "Jessica matrix mode",
-"Jessica stop polling", "Jessica stop speaking".
+"Jessica stop polling", "Jessica stop speaking", "Jessica Gemini Live".
 
 POLLING AND PRIVACY
-Enter a text prompt, select Start polling and confirm. The prompt and recent
+In optional OpenRouter API chat, enter a text prompt, select Start polling
+and confirm. The prompt and recent
 chat are sent after each reply with a 60-second delay. Polling never reads SMS,
 notifications, clipboard, sensors or audio. It cannot supply live information
 unless you type it in. Stop polling cancels future sends, not a request already
@@ -81,7 +109,7 @@ PIXEL / SECONDARY-DISPLAY MODE
 No DeX clone is necessary to display a single HUD app. Connect a supported
 external display and open Display > select the glasses/display. Android's
 Presentation API draws the HUD on the external screen, leaving controls and
-Jessica chat on the phone. Live status, colors and animations update both.
+Jessica chat on the phone. HUD status, styles, colors and animations update both.
 Disconnecting the display dismisses its HUD; leaving the app also closes it.
 Select Phone / current app window to stop the separate-screen HUD.
 This is generic Android support, not a verified Pixel 10 Pro XL guarantee.
