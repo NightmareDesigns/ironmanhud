@@ -63,6 +63,9 @@ public final class MainActivity extends Activity {
     private boolean saveChats;
     private int accentColor = Color.rgb(50, 220, 255), hudBrightness = 100;
     private boolean showClock = true, showBattery = true;
+    private boolean liveMessages;
+    private int messageGeneration;
+    private final java.util.LinkedHashMap<String, String> messageFeed = new java.util.LinkedHashMap<>();
     private String transcript = "Jessica ready. Configure OpenRouter to chat.\n";
     private TextView chatText;
     private Button pollButton;
@@ -102,6 +105,7 @@ public final class MainActivity extends Activity {
         showClock = getPreferences(MODE_PRIVATE).getBoolean("clock", true);
         showBattery = getPreferences(MODE_PRIVATE).getBoolean("battery", true);
         motion = getPreferences(MODE_PRIVATE).getBoolean("motion", true);
+        liveMessages = getPreferences(MODE_PRIVATE).getBoolean("liveMessages", false);
         LinearLayout root = column();
         root.setBackgroundColor(Color.BLACK);
         root.setPadding(dp(12), 0, dp(12), 0);
@@ -126,6 +130,7 @@ public final class MainActivity extends Activity {
         button(row, "Voice", v -> recognize());
         button(row, "Display", v -> chooseDisplay());
         button(row, "Customize", v -> customizeHud());
+        button(row, "Messages", v -> configureMessages());
         button(row, "Fullscreen", v -> { fullscreen = !fullscreen; applyFullscreen(); });
         button(row, "Pause FX", v -> {
             motion = !motion;
@@ -155,18 +160,23 @@ public final class MainActivity extends Activity {
     @Override protected void onStart() {
         super.onStart();
         active = true;
+        subscribeMessages();
         registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
         hud.setRunning(true);
     }
 
     @Override protected void onStop() {
         active = false;
+        messageGeneration++;
+        LiveMessageService.setListener(null);
+        messageFeed.clear();
+        updateMessagePanel();
         generation++;
         stopPolling();
         closeExternalDisplay();
         client.cancel();
-        busy = false;
         if (busy) updateAssistant("JESSICA STANDBY", "Request cancelled when app left the foreground.");
+        busy = false;
         if (tts != null) tts.stop();
         hud.setRunning(false);
         unregisterReceiver(batteryReceiver);
@@ -228,6 +238,7 @@ public final class MainActivity extends Activity {
                         view.setAssistant(assistantStatus, assistantReply);
                         view.setModes(motion, green);
                         view.setAppearance(accentColor, hudBrightness, showClock, showBattery);
+                        view.setMessages(liveMessages, new ArrayList<>(messageFeed.values()));
                         presentation.setContentView(view);
                         presentation.setOnDismissListener(closed -> {
                             view.setRunning(false);
@@ -365,6 +376,7 @@ public final class MainActivity extends Activity {
         fields.addView(modelInput);
         providerInput.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
             @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
+                if (busy) cancelRequest();
                 String selectedProvider = OpenRouterClient.PROVIDERS[position];
                 if (!selectedProvider.equals(provider)) {
                     keyInput.setText("");
@@ -383,7 +395,7 @@ public final class MainActivity extends Activity {
         spoken.setChecked(speak);
         fields.addView(spoken);
         CheckBox storage = new CheckBox(this);
-        storage.setText("Enable local saved chats (private app storage; not encrypted)");
+        storage.setText("Enable local saved chats (not encrypted; turning off deletes saved chats)");
         storage.setChecked(saveChats);
         fields.addView(storage);
         ScrollView settingsScroll = new ScrollView(this);
@@ -745,6 +757,49 @@ public final class MainActivity extends Activity {
                             .putInt("brightness", hudBrightness).putBoolean("clock", showClock)
                             .putBoolean("battery", showBattery).putBoolean("motion", motion).apply();
                 }).show();
+    }
+
+    private void configureMessages() {
+        new AlertDialog.Builder(this).setTitle("Right-side live messages")
+                .setMessage("Opt in to Android notification access to show incoming message notifications on the HUD and external display while this app is visible. Android grants access to all notifications, but Jessica only displays message-category notifications. Content stays in memory, is cleared when you leave, and is never added to AI prompts, saved chats or exports. Anyone viewing your display can read it.")
+                .setNegativeButton("Cancel", null)
+                .setNeutralButton("Disable / clear", (dialog, which) -> {
+                    liveMessages = false;
+                    messageGeneration++;
+                    LiveMessageService.setListener(null);
+                    messageFeed.clear();
+                    getPreferences(MODE_PRIVATE).edit().putBoolean("liveMessages", false).apply();
+                    updateMessagePanel();
+                    toast("Panel disabled. You can also revoke notification access in Android Settings.");
+                })
+                .setPositiveButton("Enable / access settings", (dialog, which) -> {
+                    liveMessages = true;
+                    getPreferences(MODE_PRIVATE).edit().putBoolean("liveMessages", true).apply();
+                    updateMessagePanel();
+                    Intent intent = new Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
+                    try { startActivity(intent); }
+                    catch (ActivityNotFoundException exception) { toast("Notification access settings are unavailable."); }
+                    subscribeMessages();
+                }).show();
+    }
+
+    private void subscribeMessages() {
+        if (!liveMessages || !active) { LiveMessageService.setListener(null); return; }
+        int token = ++messageGeneration;
+        LiveMessageService.setListener((key, text) -> handler.post(() -> {
+            if (!active || !liveMessages || isDestroyed() || token != messageGeneration) return;
+            messageFeed.remove(key);
+            messageFeed.put(key, text);
+            while (messageFeed.size() > 4) messageFeed.remove(messageFeed.keySet().iterator().next());
+            updateMessagePanel();
+        }));
+        updateMessagePanel();
+    }
+
+    private void updateMessagePanel() {
+        ArrayList<String> messages = new ArrayList<>(messageFeed.values());
+        if (hud != null) hud.setMessages(liveMessages, messages);
+        if (externalHud != null) externalHud.setMessages(liveMessages, messages);
     }
 
     private void append(String message) {

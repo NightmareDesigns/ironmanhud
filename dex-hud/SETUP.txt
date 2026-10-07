@@ -13,7 +13,7 @@ BUILD AND INSTALL
 3. Unzip it and copy app-debug.apk to your S23.
 4. Open it on the phone and allow installation from that source if prompted.
    This is a debug-signed APK for personal testing, not a Play Store release.
-   No Unity license, signing secret or OpenRouter key is needed to build.
+   No Unity license, signing secret or provider API key is needed to build.
 
 Local build: JDK 17, Android SDK platform 35 and build-tools 35.0.0.
 From the dex-hud directory run:
@@ -31,30 +31,80 @@ The window is resizable and has no locked orientation. The control row scrolls
 horizontally in small windows. Jessica's dialog supports typed input/keyboard.
 Pause FX freezes reactor rotation but keeps the clock and battery updating.
 Matrix switches the HUD to green; it is a visual theme, not AR immersion.
+Customize selects cyan, green, amber or violet, HUD brightness, clock/battery
+visibility and reactor animation. These customization settings survive restarts.
+The layered reactor, radial ticks, core glow, scanning grid and FX bars are
+decorative only; they are not measured suit/sensor telemetry.
 Clock and battery are real. The reactor is fictional visual decoration.
-No weather, notifications, hand tracking or eye tracking is implemented.
+No weather, hand tracking or eye tracking is implemented.
 
-JESSICA / OPENROUTER
+JESSICA / API PROVIDERS
 The HUD works offline. For AI, open Jessica > Settings and enter your own
-OpenRouter API key on-device. The key is held only in memory, not written to
+selected provider's API key on-device. OpenRouter, Groq and Cerebras connect
+directly over HTTPS; no proxy or shared key is bundled.
+The key is held only in memory, not written to
 storage, logs, APKs or GitHub. Restarting or recreating the activity (including
 some resize/orientation transitions) requires re-entering the key.
-Only the selected model ID is saved. Never commit a key.
+Provider, model and non-secret preferences are saved. Never commit a key.
 Default model: openrouter/free (OpenRouter's free-model router).
-You can instead enter a currently available provider/model:free ID from
-OpenRouter's model catalog. Paid model IDs are rejected by the app.
+Enter the provider key, then Browse available models to fetch its live catalog.
+OpenRouter lists only free-named IDs with zero prompt/completion prices.
+You can also enter a provider/model:free ID. OpenRouter paid IDs are rejected.
+Groq and Cerebras catalog IDs are NOT a guarantee of free usage: their free
+tiers depend on your account, limits and billing settings. Check your provider
+dashboard; the app cannot enforce account quotas or guarantee no charges.
 Free models still need an account/key; availability, quotas, provider terms
 and account restrictions can change. No unlimited access is promised.
+Changing providers clears the current chat so it is not silently forwarded to
+another provider. Loading a saved chat requires confirmation before reuse.
+Responses stream into the chat/HUD. Cancel stops local network work and polling;
+it cannot recall data already submitted. Retry resends only the last failed or
+cancelled prompt on explicit request; successful messages are not retried.
 
 Send submits typed text. Voice opens the installed Android speech recognizer,
-then sends the recognized question to Jessica. There is no always-on mic.
+then sends the recognized question to Jessica. There is no always-on mic in
+ordinary Jessica chat (Gemini Live is a separate opt-in session).
+Using Voice during a text request cancels that request first.
 Enable spoken replies in Settings to use Android text-to-speech. The chosen
 system voice is used; a specific female voice is not guaranteed.
 Speech recognition and TTS availability depend on installed engines/languages
 and may use provider cloud services. Text input remains available if speech
 recognition is missing. No raw audio is sent to OpenRouter by this app.
 Local voice commands: "Jessica fullscreen", "Jessica matrix mode",
-"Jessica stop polling", "Jessica stop speaking".
+"Jessica cyan mode", "Jessica exit fullscreen", "Jessica pause effects",
+"Jessica resume effects", "Jessica cancel request", "Jessica retry",
+"Jessica new chat", "Jessica save chat", "Jessica open chat",
+"Jessica customize HUD", "Jessica Gemini Live", "Jessica stop polling",
+"Jessica stop speaking". Destructive commands still require confirmation.
+
+SAVED CHATS / SEARCH / EXPORT
+Saving is off by default. Enable local saved chats in Settings, then Save chat
+to store a completed snapshot. Up to 10 snapshots are retained in private app
+storage; they are not encrypted by the app and Android backup is disabled.
+Saved / search filters the saved text, loads a selected chat after confirmation,
+and offers Delete all. Turning off saved chats deletes stored snapshots.
+New chat clears only the current in-memory chat. Chat context is bounded to
+12 recent messages; the displayed/exported transcript is bounded to 16,000
+characters. Snapshots include these bounded values, not a full unlimited log.
+Export asks you to select a text-file destination using Android's document
+picker. Exported files are outside the app's private storage and may be shared
+or synced by the destination. Exports never include the app's configured keys.
+Avoid putting sensitive information (including keys) in your chat text itself.
+
+RIGHT-SIDE LIVE MESSAGE PANEL
+Messages > Enable / access settings opts into Android notification access.
+Enable Jessica live messages there and return to the HUD. New message-category
+notifications appear on the right, newest first, on both HUD displays.
+This uses notification events, not repeated SMS polling or SMS permissions.
+Only message-category notifications with text are shown; apps that hide content
+or use other notification categories may not appear. No historical inbox is read.
+Android's access grant covers notifications broadly; the app filters to message
+notifications and discards events unless the HUD activity is visible.
+The latest four entries stay in memory only and clear when leaving the HUD.
+They are never sent to any AI, saved with chats or included in chat exports.
+Anyone viewing your phone/glasses can read them. Messages > Disable / clear
+stops the panel; revoke notification access in Android Settings to remove the
+system grant too. Background monitoring and automatic replies are not provided.
 
 POLLING AND PRIVACY
 Enter a text prompt, select Start polling and confirm. The prompt and recent
@@ -64,8 +114,9 @@ unless you type it in. Stop polling cancels future sends, not a request already
 submitted. Errors stop polling rather than repeatedly retrying.
 Leaving the app stops polling, cancels network work and stops speech; returning
 does not restart polling. No background monitoring or autonomous actions.
-OpenRouter and its model providers receive your prompts and recent chat.
-Chat is bounded and held only in memory; do not submit sensitive information.
+The selected API provider and its model providers receive prompts/recent chat.
+Chat is bounded and held only in memory unless you explicitly save or export.
+Do not submit sensitive information.
 AI output is untrusted and may be inaccurate; it cannot execute app commands.
 
 DISPLAY LIMITATIONS

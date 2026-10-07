@@ -86,6 +86,7 @@ final class OpenRouterClient {
             if (ids.isEmpty()) throw failure("No eligible models were found. Check your account or try another provider.");
             return new ArrayList<>(ids);
         } catch (JSONException e) {
+            check(request);
             throw failure("The provider returned an invalid model catalog. Try again later.");
         } catch (IOException e) {
             throw safeFailure(request, e);
@@ -128,6 +129,7 @@ final class OpenRouterClient {
                 return readStream(request, input, partial);
             }
         } catch (JSONException e) {
+            check(request);
             throw failure("The provider returned an invalid stream. Try again later.");
         } catch (IOException e) {
             throw safeFailure(request, e);
@@ -217,7 +219,11 @@ final class OpenRouterClient {
                     if (partial != null && end > 0) partial.accept(text.toString());
                 }
             }
-            if (!finish.isEmpty()) return true;
+            if (!finish.isEmpty()) {
+                if ("stop".equals(finish) || "length".equals(finish)
+                        || "tool_calls".equals(finish) || "function_call".equals(finish)) return true;
+                throw failure("The provider did not complete the response normally. Try another request or model.");
+            }
         }
         return false;
     }
@@ -251,6 +257,7 @@ final class OpenRouterClient {
         }
         Request request = new Request(current, cancelled);
         current.setInstanceFollowRedirects(false);
+        current.setUseCaches(false);
         current.setConnectTimeout(15000);
         current.setReadTimeout(45000);
         current.setRequestProperty("Authorization", "Bearer " + key);
@@ -325,6 +332,8 @@ final class OpenRouterClient {
     }
 
     private static final class ClientException extends IOException {
+        private static final long serialVersionUID = 1L;
+
         ClientException(String message) {
             super(message);
         }
