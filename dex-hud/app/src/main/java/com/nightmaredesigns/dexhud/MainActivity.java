@@ -31,6 +31,12 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
+import android.widget.CheckBox;
+import android.widget.SeekBar;
+import android.text.TextWatcher;
+import android.text.Editable;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -42,6 +48,7 @@ import java.util.concurrent.Executors;
 
 public final class MainActivity extends Activity {
     private static final int VOICE_REQUEST = 10;
+    private static final int EXPORT_REQUEST = 11;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final OpenRouterClient client = new OpenRouterClient();
@@ -52,6 +59,10 @@ public final class MainActivity extends Activity {
     private volatile boolean active;
     private volatile int generation;
     private String apiKey = "", model = "openrouter/free", pollingPrompt = "";
+    private String provider = "OpenRouter", failedPrompt, pendingExport;
+    private boolean saveChats;
+    private int accentColor = Color.rgb(50, 220, 255), hudBrightness = 100;
+    private boolean showClock = true, showBattery = true;
     private String transcript = "Jessica ready. Configure OpenRouter to chat.\n";
     private TextView chatText;
     private Button pollButton;
@@ -83,6 +94,14 @@ public final class MainActivity extends Activity {
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         model = getPreferences(MODE_PRIVATE).getString("model", "openrouter/free");
+        provider = getPreferences(MODE_PRIVATE).getString("provider", "OpenRouter");
+        if (!java.util.Arrays.asList(OpenRouterClient.PROVIDERS).contains(provider)) provider = "OpenRouter";
+        saveChats = getPreferences(MODE_PRIVATE).getBoolean("saveChats", false);
+        accentColor = getPreferences(MODE_PRIVATE).getInt("accent", accentColor);
+        hudBrightness = getPreferences(MODE_PRIVATE).getInt("brightness", 100);
+        showClock = getPreferences(MODE_PRIVATE).getBoolean("clock", true);
+        showBattery = getPreferences(MODE_PRIVATE).getBoolean("battery", true);
+        motion = getPreferences(MODE_PRIVATE).getBoolean("motion", true);
         LinearLayout root = column();
         root.setBackgroundColor(Color.BLACK);
         root.setPadding(dp(12), 0, dp(12), 0);
@@ -103,8 +122,10 @@ public final class MainActivity extends Activity {
         android.widget.HorizontalScrollView controls = new android.widget.HorizontalScrollView(this);
         LinearLayout row = row();
         button(row, "Jessica", v -> openJessica());
+        button(row, "Gemini Live", v -> startActivity(new Intent(this, GeminiLiveActivity.class)));
         button(row, "Voice", v -> recognize());
         button(row, "Display", v -> chooseDisplay());
+        button(row, "Customize", v -> customizeHud());
         button(row, "Fullscreen", v -> { fullscreen = !fullscreen; applyFullscreen(); });
         button(row, "Pause FX", v -> {
             motion = !motion;
@@ -119,6 +140,7 @@ public final class MainActivity extends Activity {
         controls.addView(row);
         root.addView(controls);
         setContentView(root);
+        updateModes();
         displays = (DisplayManager) getSystemService(DISPLAY_SERVICE);
         tts = new TextToSpeech(this, status -> {
             ttsReady = status == TextToSpeech.SUCCESS;
@@ -143,6 +165,7 @@ public final class MainActivity extends Activity {
         stopPolling();
         closeExternalDisplay();
         client.cancel();
+        busy = false;
         if (busy) updateAssistant("JESSICA STANDBY", "Request cancelled when app left the foreground.");
         if (tts != null) tts.stop();
         hud.setRunning(false);
@@ -204,6 +227,7 @@ public final class MainActivity extends Activity {
                         view.setBattery(batteryPercent, plugged);
                         view.setAssistant(assistantStatus, assistantReply);
                         view.setModes(motion, green);
+                        view.setAppearance(accentColor, hudBrightness, showClock, showBattery);
                         presentation.setContentView(view);
                         presentation.setOnDismissListener(closed -> {
                             view.setRunning(false);
@@ -233,7 +257,11 @@ public final class MainActivity extends Activity {
 
     private void updateModes() {
         hud.setModes(motion, green);
-        if (externalHud != null) externalHud.setModes(motion, green);
+        hud.setAppearance(accentColor, hudBrightness, showClock, showBattery);
+        if (externalHud != null) {
+            externalHud.setModes(motion, green);
+            externalHud.setAppearance(accentColor, hudBrightness, showClock, showBattery);
+        }
     }
 
     private void updateAssistant(String status, String reply) {
@@ -256,7 +284,7 @@ public final class MainActivity extends Activity {
         if (chatDialog != null && chatDialog.isShowing()) return;
         LinearLayout content = column();
         content.setPadding(dp(16), dp(8), dp(16), dp(8));
-        content.addView(label("Text is sent to OpenRouter/model providers. Voice uses your installed speech service."));
+        content.addView(label("Text is sent to " + provider + "/model providers. Voice uses your installed speech service."));
         chatText = label(transcript);
         chatText.setTextIsSelectable(true);
         ScrollView messages = new ScrollView(this);
@@ -276,6 +304,12 @@ public final class MainActivity extends Activity {
         });
         button(actions, "Voice", v -> recognize());
         button(actions, "Settings", v -> openSettings());
+        button(actions, "Cancel", v -> cancelRequest());
+        button(actions, "Retry", v -> retryPrompt());
+        button(actions, "New chat", v -> confirmNewChat());
+        button(actions, "Save chat", v -> saveConversation());
+        button(actions, "Saved / search", v -> browseConversations());
+        button(actions, "Export", v -> exportConversation());
         android.widget.HorizontalScrollView actionScroll = new android.widget.HorizontalScrollView(this);
         actionScroll.addView(actions);
         content.addView(actionScroll);
@@ -288,7 +322,7 @@ public final class MainActivity extends Activity {
             if (busy) { toast("Wait for Jessica's current reply."); return; }
             if (apiKey.isEmpty()) { openSettings(); return; }
             new AlertDialog.Builder(this).setTitle("Start text polling?")
-                    .setMessage("Send this prompt and recent chat to OpenRouter every 60 seconds while this app is visible? Free-model limits apply. This does not read messages, notifications or live sensors.")
+                    .setMessage("Send this prompt and recent chat to " + provider + " every 60 seconds while this app is visible? Account quotas and possible billing apply. This does not read messages, notifications or live sensors.")
                     .setNegativeButton("Cancel", null)
                     .setPositiveButton("Start", (dialog, which) -> {
                         pollingPrompt = prompt;
@@ -307,34 +341,64 @@ public final class MainActivity extends Activity {
     }
 
     private void openSettings() {
+        if (busy) { toast("Cancel the current request before changing providers."); return; }
         LinearLayout fields = column();
         fields.setPadding(dp(20), dp(8), dp(20), 0);
         fields.addView(label("API key stays in memory only; re-enter after closing/recreating the app. Never add it to GitHub."));
+        fields.addView(label("OpenRouter accepts only free models. Groq and Cerebras offer account-based free tiers, not guaranteed free model IDs. Check your account limits and billing before sending."));
+        Spinner providerInput = new Spinner(this);
+        providerInput.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
+                OpenRouterClient.PROVIDERS));
+        providerInput.setSelection(java.util.Arrays.asList(OpenRouterClient.PROVIDERS).indexOf(provider));
+        fields.addView(providerInput);
         EditText keyInput = new EditText(this);
-        keyInput.setHint("OpenRouter API key");
+        keyInput.setHint("Selected provider's API key");
         keyInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         keyInput.setText(apiKey);
         keyInput.setSaveEnabled(false);
         keyInput.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
         fields.addView(keyInput);
         EditText modelInput = new EditText(this);
-        modelInput.setHint("openrouter/free or provider/model:free");
+        modelInput.setHint("Browse models or enter a model ID");
         modelInput.setSingleLine();
         modelInput.setText(model);
         fields.addView(modelInput);
+        providerInput.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
+                String selectedProvider = OpenRouterClient.PROVIDERS[position];
+                if (!selectedProvider.equals(provider)) {
+                    keyInput.setText("");
+                    modelInput.setText(selectedProvider.equals("OpenRouter") ? "openrouter/free" : "");
+                } else {
+                    keyInput.setText(apiKey);
+                    modelInput.setText(model);
+                }
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
+        });
+        button(fields, "Browse available models", v -> browseModels(
+                providerInput.getSelectedItem().toString(), keyInput.getText().toString().trim(), modelInput));
         android.widget.CheckBox spoken = new android.widget.CheckBox(this);
         spoken.setText("Speak Jessica's replies (Android text-to-speech)");
         spoken.setChecked(speak);
         fields.addView(spoken);
-        AlertDialog settings = new AlertDialog.Builder(this).setTitle("OpenRouter / Jessica")
-                .setView(fields).setNegativeButton("Cancel", null).setPositiveButton("Save", null).create();
+        CheckBox storage = new CheckBox(this);
+        storage.setText("Enable local saved chats (private app storage; not encrypted)");
+        storage.setChecked(saveChats);
+        fields.addView(storage);
+        ScrollView settingsScroll = new ScrollView(this);
+        settingsScroll.addView(fields);
+        AlertDialog settings = new AlertDialog.Builder(this).setTitle("Providers / Jessica")
+                .setView(settingsScroll).setNegativeButton("Cancel", null).setPositiveButton("Save", null).create();
         settings.show();
         settings.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         settings.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            if (busy) { toast("Wait for model browsing or cancel the request first."); return; }
             String selected = modelInput.getText().toString().trim();
+            String selectedProvider = providerInput.getSelectedItem().toString();
             String key = keyInput.getText().toString().trim();
-            if (!OpenRouterClient.isFreeModel(selected)) {
-                modelInput.setError("Use openrouter/free or an ID ending in :free");
+            if (!OpenRouterClient.isValidModel(selectedProvider, selected)) {
+                modelInput.setError("Choose a valid model; OpenRouter requires a free model ID");
                 return;
             }
             if (key.contains("\n") || key.contains("\r") || key.length() > 512) {
@@ -342,18 +406,29 @@ public final class MainActivity extends Activity {
                 return;
             }
             stopPolling();
+            if (!provider.equals(selectedProvider)) {
+                history.clear();
+                transcript = "Provider changed. New chat ready.\n";
+                if (chatText != null) chatText.setText(transcript);
+                failedPrompt = null;
+            }
+            provider = selectedProvider;
             apiKey = key;
             model = selected;
             speak = spoken.isChecked();
             if (!speak && tts != null) tts.stop();
-            getPreferences(MODE_PRIVATE).edit().putString("model", model).apply();
+            saveChats = storage.isChecked();
+            android.content.SharedPreferences.Editor prefs = getPreferences(MODE_PRIVATE).edit()
+                    .putString("model", model).putString("provider", provider).putBoolean("saveChats", saveChats);
+            if (!saveChats) prefs.remove("conversations");
+            prefs.apply();
             settings.dismiss();
             toast(key.isEmpty() ? "Key cleared. Offline HUD remains available." : "Jessica configured.");
         });
     }
 
     private void recognize() {
-        if (busy) { toast("Wait for Jessica's current reply before using Voice."); return; }
+        if (busy) cancelRequest();
         stopPolling();
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
@@ -367,6 +442,17 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == EXPORT_REQUEST) {
+            String text = pendingExport;
+            pendingExport = null;
+            if (result != RESULT_OK || data == null || data.getData() == null || text == null) return;
+            try (java.io.OutputStream output = getContentResolver().openOutputStream(data.getData(), "wt")) {
+                if (output == null) throw new java.io.IOException("No destination");
+                output.write(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                toast("Conversation exported.");
+            } catch (Exception exception) { toast("Unable to export to that destination."); }
+            return;
+        }
         if (request != VOICE_REQUEST || result != RESULT_OK || data == null) return;
         ArrayList<String> results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
         if (results == null || results.isEmpty()) return;
@@ -379,7 +465,18 @@ public final class MainActivity extends Activity {
         String command = prompt.toLowerCase(Locale.ROOT).replaceFirst("^jessica[, ]*", "").trim();
         switch (command) {
             case "matrix mode": green = true; updateModes(); break;
+            case "cyan mode": green = false; accentColor = Color.rgb(50, 220, 255); updateModes(); break;
+            case "pause effects": motion = false; updateModes(); break;
+            case "resume effects": motion = true; updateModes(); break;
             case "fullscreen": fullscreen = true; applyFullscreen(); break;
+            case "exit fullscreen": fullscreen = false; applyFullscreen(); break;
+            case "cancel request": cancelRequest(); break;
+            case "retry": retryPrompt(); break;
+            case "new chat": confirmNewChat(); break;
+            case "save chat": saveConversation(); break;
+            case "open chat": openJessica(); break;
+            case "customize hud": customizeHud(); break;
+            case "gemini live": startActivity(new Intent(this, GeminiLiveActivity.class)); break;
             case "stop polling": stopPolling(); break;
             case "stop speaking": if (tts != null) tts.stop(); break;
             default: sendPrompt(prompt);
@@ -407,30 +504,36 @@ public final class MainActivity extends Activity {
         }
         busy = true;
         int requestGeneration = generation;
-        String requestKey = apiKey, requestModel = model;
+        String requestKey = apiKey, requestModel = model, requestProvider = provider;
+        failedPrompt = prompt;
         append("You: " + prompt);
-        updateAssistant("JESSICA THINKING", "Contacting OpenRouter free model...");
+        String requestTranscript = transcript;
+        updateAssistant("JESSICA THINKING", "Contacting " + provider + "...");
         executor.execute(() -> {
             String answer;
             boolean success;
             try {
-                answer = client.chat(requestKey, requestModel, messages,
-                        () -> !active || requestGeneration != generation);
+                answer = client.chat(requestProvider, requestKey, requestModel, messages,
+                        () -> !active || requestGeneration != generation, partial -> handler.post(() -> {
+                            if (!active || isDestroyed() || requestGeneration != generation) return;
+                            updateAssistant("JESSICA STREAMING", partial);
+                            if (chatText != null) chatText.setText(requestTranscript + "\nJessica: " + partial);
+                        }));
                 success = true;
             } catch (Exception exception) {
                 answer = exception instanceof java.io.IOException && exception.getMessage() != null
-                        && exception.getMessage().startsWith("OpenRouter")
-                        ? exception.getMessage() : "Unable to reach Jessica. Check your connection, key and free-model availability.";
+                        ? exception.getMessage() : "Unable to reach Jessica. Check your connection, key and model availability.";
                 success = false;
             }
             final String reply = answer;
             final boolean ok = success;
             handler.post(() -> {
-                busy = false;
                 if (!active || isDestroyed() || requestGeneration != generation) return;
+                busy = false;
                 append((ok ? "Jessica: " : "Connection: ") + reply);
                 updateAssistant(ok ? "JESSICA ONLINE" : "JESSICA OFFLINE", reply);
                 if (ok) {
+                    failedPrompt = null;
                     try {
                         history.add(new JSONObject().put("role", "user").put("content", prompt));
                         history.add(new JSONObject().put("role", "assistant").put("content", reply));
@@ -449,6 +552,199 @@ public final class MainActivity extends Activity {
         polling = false;
         handler.removeCallbacks(poll);
         if (pollButton != null) pollButton.setText("Start polling (60s)");
+    }
+
+    private void cancelRequest() {
+        stopPolling();
+        generation++;
+        client.cancel();
+        busy = false;
+        if (chatText != null) chatText.setText(transcript);
+        updateAssistant("JESSICA STANDBY", "Cancelled. Already submitted data cannot be recalled.");
+    }
+
+    private void retryPrompt() {
+        if (failedPrompt == null) { toast("No failed or cancelled message to retry."); return; }
+        stopPolling();
+        sendPrompt(failedPrompt);
+    }
+
+    private void browseModels(String selectedProvider, String key, EditText target) {
+        if (busy) { toast("A request is already running."); return; }
+        if (key.length() > 512 || key.contains("\n") || key.contains("\r")) {
+            toast("Invalid API key."); return;
+        }
+        busy = true;
+        int token = generation;
+        toast("Fetching " + selectedProvider + " model catalog...");
+        executor.execute(() -> {
+            java.util.List<String> models = null;
+            String error = null;
+            try { models = client.models(selectedProvider, key, () -> !active || generation != token); }
+            catch (Exception exception) { error = "Could not load models. Check your key, connection and provider availability."; }
+            final java.util.List<String> found = models;
+            final String failure = error;
+            handler.post(() -> {
+                if (!active || isDestroyed() || generation != token) return;
+                busy = false;
+                if (!target.isAttachedToWindow()) return;
+                if (failure != null) { toast(failure); return; }
+                if (found == null || found.isEmpty()) { toast("No eligible models available."); return; }
+                new AlertDialog.Builder(this).setTitle(selectedProvider + " models")
+                        .setItems(found.toArray(new String[0]), (dialog, index) -> {
+                            if (target.isAttachedToWindow()) target.setText(found.get(index));
+                        }).setNegativeButton("Cancel", null).show();
+            });
+        });
+    }
+
+    private void confirmNewChat() {
+        new AlertDialog.Builder(this).setTitle("Start a new chat?")
+                .setMessage("Clears the current in-memory conversation and cancels requests. Saved chats are kept.")
+                .setNegativeButton("Cancel", null).setPositiveButton("Clear", (dialog, which) -> {
+                    cancelRequest();
+                    history.clear();
+                    failedPrompt = null;
+                    transcript = "Jessica ready. New chat.\n";
+                    if (chatText != null) chatText.setText(transcript);
+                }).show();
+    }
+
+    private JSONArray savedConversations() {
+        String data = getPreferences(MODE_PRIVATE).getString("conversations", "[]");
+        if (data.length() > 512000) return new JSONArray();
+        try { return new JSONArray(data); }
+        catch (org.json.JSONException exception) { return new JSONArray(); }
+    }
+
+    private void saveConversation() {
+        if (!saveChats) { toast("Enable local saved chats in Settings first."); return; }
+        if (busy) { toast("Finish or cancel the current reply before saving."); return; }
+        if (history.isEmpty()) { toast("No completed conversation to save."); return; }
+        try {
+            JSONArray chats = savedConversations();
+            String title = history.get(0).optString("content", "Chat");
+            title = title.substring(0, Math.min(64, title.length()));
+            JSONArray messages = new JSONArray();
+            for (JSONObject message : history) messages.put(message);
+            JSONObject snapshot = new JSONObject().put("title", title)
+                    .put("text", transcript).put("messages", messages)
+                    .put("time", System.currentTimeMillis());
+            JSONArray bounded = new JSONArray().put(snapshot);
+            for (int i = 0; i < Math.min(chats.length(), 9); i++) bounded.put(chats.get(i));
+            getPreferences(MODE_PRIVATE).edit().putString("conversations", bounded.toString()).apply();
+            toast("Saved on this device (up to 10 snapshots).");
+        } catch (org.json.JSONException exception) { toast("Could not save this conversation."); }
+    }
+
+    private void browseConversations() {
+        LinearLayout content = column();
+        EditText search = new EditText(this);
+        search.setHint("Search saved conversations");
+        content.addView(search);
+        android.widget.ListView list = new android.widget.ListView(this);
+        content.addView(list, new LinearLayout.LayoutParams(-1, dp(240)));
+        ArrayList<JSONObject> visible = new ArrayList<>();
+        Runnable refresh = () -> {
+            visible.clear();
+            ArrayList<String> titles = new ArrayList<>();
+            JSONArray chats = savedConversations();
+            String query = search.getText().toString().toLowerCase(Locale.ROOT);
+            for (int i = 0; i < Math.min(chats.length(), 10); i++) {
+                JSONObject item = chats.optJSONObject(i);
+                if (item == null || !item.optString("text").toLowerCase(Locale.ROOT).contains(query)) continue;
+                visible.add(item);
+                titles.add(item.optString("title", "Chat") + "\n"
+                        + new java.util.Date(item.optLong("time")));
+            }
+            list.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, titles));
+        };
+        search.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) { refresh.run(); }
+            @Override public void afterTextChanged(Editable text) { }
+        });
+        AlertDialog browser = new AlertDialog.Builder(this).setTitle("Saved chats (local only)")
+                .setView(content).setNegativeButton("Close", null)
+                .setNeutralButton("Delete all", (dialog, which) ->
+                    new AlertDialog.Builder(this).setTitle("Delete all saved chats?")
+                            .setNegativeButton("Cancel", null).setPositiveButton("Delete", (d, w) ->
+                                getPreferences(MODE_PRIVATE).edit().remove("conversations").apply()).show())
+                .create();
+        list.setOnItemClickListener((parent, view, index, id) -> {
+            JSONObject snapshot = visible.get(index);
+            new AlertDialog.Builder(this).setTitle("Load saved chat?")
+                    .setMessage("Replaces the current chat. Future sends include this history to " + provider + ".")
+                    .setNegativeButton("Cancel", null).setPositiveButton("Load", (d, w) -> {
+                        cancelRequest();
+                        history.clear();
+                        JSONArray messages = snapshot.optJSONArray("messages");
+                        if (messages != null) {
+                            for (int i = 0; i < Math.min(messages.length(), 12); i++) {
+                                JSONObject message = messages.optJSONObject(i);
+                                if (message != null && ("user".equals(message.optString("role"))
+                                        || "assistant".equals(message.optString("role")))) history.add(message);
+                            }
+                        }
+                        transcript = snapshot.optString("text", "");
+                        if (transcript.length() > 16000) transcript = transcript.substring(transcript.length() - 16000);
+                        failedPrompt = null;
+                        if (chatText != null) chatText.setText(transcript);
+                        browser.dismiss();
+                        openJessica();
+                    }).show();
+        });
+        refresh.run();
+        browser.show();
+    }
+
+    private void exportConversation() {
+        if (busy) { toast("Finish or cancel the reply before exporting."); return; }
+        new AlertDialog.Builder(this).setTitle("Export chat text?")
+                .setMessage("The exported file contains your conversation, not API keys. Anyone with access to the chosen destination may read it.")
+                .setNegativeButton("Cancel", null).setPositiveButton("Choose file", (dialog, which) -> {
+                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("text/plain");
+                    intent.putExtra(Intent.EXTRA_TITLE, "jessica-chat.txt");
+                    pendingExport = transcript;
+                    try { startActivityForResult(intent, EXPORT_REQUEST); }
+                    catch (ActivityNotFoundException exception) {
+                        pendingExport = null;
+                        toast("No document picker installed.");
+                    }
+                }).show();
+    }
+
+    private void customizeHud() {
+        LinearLayout fields = column();
+        Spinner colors = new Spinner(this);
+        colors.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"Cyan", "Green", "Amber", "Violet"}));
+        int[] values = {Color.rgb(50, 220, 255), Color.rgb(80, 255, 120),
+                Color.rgb(255, 185, 50), Color.rgb(190, 125, 255)};
+        for (int i = 0; i < values.length; i++) if (values[i] == accentColor) colors.setSelection(i);
+        fields.addView(colors);
+        fields.addView(label("HUD brightness (20–100%, not screen brightness)"));
+        SeekBar brightness = new SeekBar(this);
+        brightness.setMax(80);
+        brightness.setProgress(Math.max(0, Math.min(80, hudBrightness - 20)));
+        fields.addView(brightness);
+        CheckBox clock = new CheckBox(this), battery = new CheckBox(this), effects = new CheckBox(this);
+        clock.setText("Show clock"); clock.setChecked(showClock); fields.addView(clock);
+        battery.setText("Show battery"); battery.setChecked(showBattery); fields.addView(battery);
+        effects.setText("Animate reactor"); effects.setChecked(motion); fields.addView(effects);
+        new AlertDialog.Builder(this).setTitle("HUD customization").setView(fields)
+                .setNegativeButton("Cancel", null).setPositiveButton("Apply", (dialog, which) -> {
+                    accentColor = values[colors.getSelectedItemPosition()];
+                    green = false;
+                    hudBrightness = brightness.getProgress() + 20;
+                    showClock = clock.isChecked(); showBattery = battery.isChecked(); motion = effects.isChecked();
+                    updateModes();
+                    getPreferences(MODE_PRIVATE).edit().putInt("accent", accentColor)
+                            .putInt("brightness", hudBrightness).putBoolean("clock", showClock)
+                            .putBoolean("battery", showBattery).putBoolean("motion", motion).apply();
+                }).show();
     }
 
     private void append(String message) {

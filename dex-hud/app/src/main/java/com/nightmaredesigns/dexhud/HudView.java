@@ -25,6 +25,9 @@ final class HudView extends View {
     private boolean animated = true;
     private boolean matrix;
     private boolean running;
+    private int customAccent = Color.rgb(50, 220, 255);
+    private int brightness = 100;
+    private boolean showClock = true, showBattery = true;
     private String assistantStatus = "JESSICA STANDBY";
     private String reply = "Open Jessica to configure free-model chat.";
 
@@ -58,11 +61,21 @@ final class HudView extends View {
         invalidate();
     }
 
+    void setAppearance(int accent, int intensity, boolean clockVisible, boolean batteryVisible) {
+        customAccent = accent;
+        brightness = Math.max(20, Math.min(100, intensity));
+        showClock = clockVisible;
+        showBattery = batteryVisible;
+        invalidate();
+    }
+
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         float w = getWidth(), h = getHeight();
         if (w <= 0 || h <= 0) return;
-        int accent = matrix ? Color.rgb(80, 255, 120) : Color.rgb(50, 220, 255);
+        int color = matrix ? Color.rgb(80, 255, 120) : customAccent;
+        int accent = Color.rgb(Color.red(color) * brightness / 100,
+                Color.green(color) * brightness / 100, Color.blue(color) * brightness / 100);
         float unit = Math.min(w / 720f, h / 440f);
         float pad = 20 * unit;
         paint.setColor(accent);
@@ -95,13 +108,17 @@ final class HudView extends View {
         canvas.drawLine(cx, cy - radius * .25f, cx, cy + radius * .25f, paint);
 
         Date now = new Date();
-        text(canvas, clock.format(now), pad * 2, pad * 3, 26 * unit, accent);
-        text(canvas, date.format(now).toUpperCase(Locale.getDefault()), pad * 2,
-                pad * 4.3f, 13 * unit, accent);
+        if (showClock) {
+            text(canvas, clock.format(now), pad * 2, pad * 3, 26 * unit, accent);
+            text(canvas, date.format(now).toUpperCase(Locale.getDefault()), pad * 2,
+                    pad * 4.3f, 13 * unit, accent);
+        }
         String power = battery < 0 ? "POWER --" : "POWER " + battery + "%";
-        text(canvas, power, w - pad * 10, pad * 3, 17 * unit, accent);
-        text(canvas, charging ? "CHARGING" : "ON BATTERY", w - pad * 10,
-                pad * 4.3f, 12 * unit, accent);
+        if (showBattery) {
+            text(canvas, power, w - pad * 10, pad * 3, 17 * unit, accent);
+            text(canvas, charging ? "CHARGING" : "ON BATTERY", w - pad * 10,
+                    pad * 4.3f, 12 * unit, accent);
+        }
         text(canvas, "REACTOR / VISUAL SIMULATION", pad * 2, h * .76f, 13 * unit, accent);
         text(canvas, assistantStatus, pad * 2, h * .83f, 16 * unit, accent);
         paint.setTextSize(13 * unit);
