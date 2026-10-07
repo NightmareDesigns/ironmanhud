@@ -3,6 +3,7 @@ const { app, BrowserWindow, ipcMain, dialog, session } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const crypto = require('node:crypto');
+const PAGE_URL = require('node:url').pathToFileURL(path.join(__dirname, 'index.html')).href;
 
 const ENDPOINTS = Object.freeze({
   openrouter: 'https://openrouter.ai/api/v1/chat/completions',
@@ -52,7 +53,7 @@ function stopLive(reason = 'Live session stopped.') {
 function trusted(event) {
   return win && event.sender === win.webContents &&
     event.senderFrame === win.webContents.mainFrame &&
-    event.senderFrame.url === require('node:url').pathToFileURL(path.join(__dirname, 'index.html')).href;
+    event.senderFrame.url === PAGE_URL;
 }
 function handle(name, fn) {
   ipcMain.handle(name, async (event, payload) => {
@@ -96,11 +97,13 @@ async function streamChat(request, operation) {
     }
     reader = response.body.getReader();
     const decoder = new TextDecoder();
-    let buffer = '', total = 0;
+    let buffer = '', total = 0, incomingBytes = 0, hasText = false;
     let completed = false;
     while (!completed) {
       const { done, value } = await reader.read();
       if (done) break;
+      incomingBytes += value.byteLength;
+      if (incomingBytes > 2000000) throw new Error('Incoming stream limit');
       buffer = (buffer + decoder.decode(value, { stream: true })).replace(/\r\n/g, '\n');
       if (buffer.length > 262144) throw new Error('Stream limit');
       let boundary;
@@ -112,14 +115,24 @@ async function streamChat(request, operation) {
         if (data === '[DONE]') { completed = true; break; }
         const packet = JSON.parse(data);
         if (packet.error) throw new Error('Provider stream error');
-        const delta = packet.choices?.[0]?.delta?.content;
+        const choice = packet.choices?.[0];
+        const delta = choice?.delta?.content;
         if (typeof delta === 'string' && delta) {
           total += delta.length;
-          if (total > 100000) throw new Error('Output limit');
+          if (total > 20000) throw new Error('Output limit');
+          hasText ||= delta.trim().length > 0;
           send('chat-event', { id, type: 'delta', text: delta });
+        }
+        if (choice?.finish_reason != null) {
+          if (choice.finish_reason === 'stop') { completed = true; break; }
+          finish('error', choice.finish_reason === 'content_filter' ? 'Provider filtered this reply. Revise your prompt before retrying.' :
+            choice.finish_reason === 'length' ? 'Reply reached the provider token limit and is incomplete. Ask for a shorter response.' :
+              'Provider could not complete a text reply. Try a different prompt or model.');
+          return;
         }
       }
     }
+    if (!completed || !hasText) throw new Error('Incomplete or empty response');
     finish('done', 'Response complete.');
   } catch {
     finish('error', operation.abort.signal.aborted ? 'Request stopped or timed out. You can retry.' : 'Connection interrupted or response limit reached. You can retry.');
@@ -226,6 +239,7 @@ handle('start-live', request => {
       if (raw.length > 2000000) throw new Error('Frame limit');
       const data = JSON.parse(raw);
       if (data.error) { stopLive('Gemini rejected the session. Check the model, API key, access and billing.'); return; }
+      if (data.goAway) { stopLive('Gemini session ending. Start a fresh session to reconnect.'); return; }
       if (data.setupComplete) {
         clearTimeout(operation.timer);
         operation.ready = true;
@@ -241,7 +255,6 @@ handle('start-live', request => {
         const audio = part.inlineData;
         if (audio && text(audio.data, 1000000) && /^audio\/pcm(?:;rate=24000)?$/.test(audio.mimeType)) send('live-event', { type: 'audio', data: audio.data });
       }
-      if (data.goAway) stopLive('Gemini session ending. Start a fresh session to reconnect.');
     } catch { stopLive('Live response unavailable or exceeded safety limits.'); }
   });
   socket.addEventListener('error', () => { if (live === operation) stopLive('Live connection failed. Check connectivity, key, model and account access.'); });
@@ -273,10 +286,13 @@ app.whenReady().then(async () => {
   } catch { /* Missing or invalid local state falls back to safe defaults. */ }
   session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
     callback(contents === win?.webContents && win.isFocused() && permission === 'media' &&
+      contents.mainFrame.url === PAGE_URL && details.isMainFrame === true && details.requestingUrl === PAGE_URL &&
       details.mediaTypes?.length === 1 && details.mediaTypes[0] === 'audio');
   });
-  session.defaultSession.setPermissionCheckHandler((contents, permission) =>
-    contents === win?.webContents && win.isFocused() && permission === 'media');
+  session.defaultSession.setPermissionCheckHandler((contents, permission, _origin, details) =>
+    contents === win?.webContents && win.isFocused() && permission === 'media' &&
+    contents.mainFrame.url === PAGE_URL && details.isMainFrame === true &&
+    details.requestingUrl === PAGE_URL && details.mediaType === 'audio');
   win = new BrowserWindow({ width: 1380, height: 920, minWidth: 780, minHeight: 600, backgroundColor: '#050b14',
     title: 'Jessica • Desktop HUD', autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true } });

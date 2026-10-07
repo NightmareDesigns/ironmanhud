@@ -462,7 +462,15 @@ public final class MainActivity extends Activity {
             String text = pendingExport;
             pendingExport = null;
             if (result != RESULT_OK || data == null || data.getData() == null || text == null) return;
-            try (java.io.OutputStream output = getContentResolver().openOutputStream(data.getData(), "wt")) {
+            android.net.Uri destination = data.getData();
+            if (!android.content.ContentResolver.SCHEME_CONTENT.equals(destination.getScheme())
+                    || !android.provider.DocumentsContract.isDocumentUri(this, destination)
+                    || checkUriPermission(destination, android.os.Process.myPid(), android.os.Process.myUid(),
+                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                toast("Choose a writable document using Android's file picker.");
+                return;
+            }
+            try (java.io.OutputStream output = getContentResolver().openOutputStream(destination, "wt")) {
                 if (output == null) throw new java.io.IOException("No destination");
                 output.write(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 toast("Conversation exported.");

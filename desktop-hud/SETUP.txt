@@ -18,6 +18,7 @@ The Windows x64 portable app is produced in:
 Copy the ENTIRE JessicaHUD-win32-x64 folder to a Windows PC, then launch
 JessicaHUD.exe. Keep resources and the other runtime files alongside it.
 This is a portable application folder, not a single-file installer.
+The app's MIT license notice is included at resources/LICENSE.
 The build is unsigned; Windows SmartScreen may show an unknown-publisher warning.
 Only run builds from a source you trust. The package requires Windows 10 or later.
 Packaging Windows on Linux downloads the official Electron Windows runtime.

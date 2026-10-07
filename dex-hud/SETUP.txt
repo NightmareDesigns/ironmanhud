@@ -52,6 +52,7 @@ some resize/orientation transitions) requires re-entering the key.
 Provider, model and non-secret preferences are saved. Never commit a key.
 Default model: openrouter/free (OpenRouter's free-model router).
 Enter the provider key, then Browse available models to fetch its live catalog.
+OpenRouter's public catalog can also be browsed before entering a key.
 OpenRouter lists only free-named IDs with zero prompt/completion prices.
 You can also enter a provider/model:free ID. OpenRouter paid IDs are rejected.
 Groq and Cerebras catalog IDs are NOT a guarantee of free usage: their free

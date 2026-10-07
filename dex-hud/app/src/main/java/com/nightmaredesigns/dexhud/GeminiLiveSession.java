@@ -38,6 +38,7 @@ final class GeminiLiveSession implements AutoCloseable {
     private final Listener listener;
     private final OkHttpClient client = new OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS).readTimeout(0, TimeUnit.SECONDS)
+            .followRedirects(false).followSslRedirects(false)
             .pingInterval(20, TimeUnit.SECONDS).retryOnConnectionFailure(false).build();
     private final AtomicBoolean closed = new AtomicBoolean();
     private final AtomicBoolean ready = new AtomicBoolean();
