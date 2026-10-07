@@ -1,0 +1,22 @@
+:root { color-scheme: dark; font-family: Consolas, monospace; color: #66eaff; background: #000000; }
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #000000; }
+body { display: flex; flex-direction: column; padding: 4vh 5vw; }
+header { display: flex; justify-content: space-between; font-size: clamp(12px, 1.5vw, 28px); letter-spacing: .15em; }
+main { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+#reactor { position: relative; width: min(36vh, 35vw); height: min(36vh, 35vw); display: grid; place-items: center; }
+#reactor span { font-size: min(12vh, 12vw); font-weight: bold; }
+.ring { position: absolute; border: 2px solid #66eaff; border-radius: 50%; background: #000000; }
+.outer { inset: 0; border-left-style: dashed; border-right-style: dashed; animation: rotate 24s linear infinite; }
+.inner { inset: 12%; border-top-color: transparent; border-bottom-color: transparent; animation: rotate 14s linear infinite reverse; }
+.reticle { position: absolute; inset: 27%; border: 1px solid #66eaff; transform: rotate(45deg); }
+#reactor span { position: relative; }
+.active .outer { animation-duration: 8s; }
+#mode { font-size: clamp(16px, 2vw, 36px); letter-spacing: .3em; margin: 4vh 0; }
+.status { display: flex; gap: 8vw; text-align: center; }
+.status b, .status span { display: block; }
+.status b { font-size: clamp(14px, 1.8vw, 32px); }
+.status span { margin-top: 1vh; font-size: clamp(10px, 1vw, 18px); letter-spacing: .15em; }
+footer { text-align: center; font-size: clamp(10px, 1vw, 18px); letter-spacing: .15em; }
+@keyframes rotate { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ring { animation: none; } }

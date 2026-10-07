@@ -5,10 +5,12 @@ on:
   push:
     paths:
       - 'dex-hud/**'
+      - 'desktop-hud/**'
       - '.github/workflows/dex-apk.yml'
   pull_request:
     paths:
       - 'dex-hud/**'
+      - 'desktop-hud/**'
       - '.github/workflows/dex-apk.yml'
 
 permissions:
@@ -42,5 +44,38 @@ jobs:
         with:
           name: Jessica-DeX-APK
           path: dex-hud/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  windows:
+    needs: android
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: desktop-hud
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop-hud/package-lock.json
+      - name: Install locked desktop dependencies
+        run: npm ci
+      - name: Check desktop JavaScript syntax
+        run: |
+          node --check main.js
+          node --check preload.js
+          node --check renderer.js
+          node --check mic-worklet.js
+          node --check hud-preload.js
+          node --check hud.js
+      - name: Package Windows desktop HUD
+        run: npm run package:win
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Jessica-Windows-x64
+          path: desktop-hud/dist/JessicaHUD-win32-x64/
           if-no-files-found: error
           retention-days: 14
