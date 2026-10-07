@@ -1,0 +1,6 @@
+<resources>
+    <style name="HudTheme" parent="HudBaseTheme">
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+    </style>
+</resources>
