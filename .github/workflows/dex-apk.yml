@@ -23,7 +23,7 @@ jobs:
         working-directory: dex-hud
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-java@c5195efecf7bdfc987ee7c5e9ab91e5c2a3f7e51 # v4.7.1
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
         with:
           distribution: temurin
           java-version: '17'
