@@ -303,8 +303,7 @@ final class HudView extends View {
             centerWidth = hasRightPanel ? (availableWidth - gap * 2) * .27f : availableWidth - navWidth - gap;
             rightWidth = hasRightPanel ? availableWidth - navWidth - centerWidth - gap * 2 : 0;
         }
-        String compass = getDisplay() == null ? "Phone compass waiting for display"
-                : navigation.phoneHeading(getDisplay().getRotation());
+        String compass = navigation.phoneHeading();
         String navBody = compass + "\n\n" + navigation.guidanceText();
         String sketchTitle = "SUPPLIED PATH SKETCH • not streets";
         float sketchTitleHeight = measuredHeight(sketchTitle, navWidth - size, size * .85f);

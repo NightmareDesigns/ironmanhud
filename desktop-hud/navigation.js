@@ -47,13 +47,26 @@ function cardinal(heading) {
 }
 
 function sketch(route, position) {
-  const all = [...route, ...(position ? [position] : [])];
-  if (!all.length) return { points: [], current: null };
-  const origin = all[0];
+  const origin = route[0] || position;
+  if (!origin) return { points: [], current: null };
   const scale = Math.max(0.000001, Math.cos(radians(origin.latitude)));
-  const projected = all.map(point => ({
-    x: longitudeDelta(point.longitude - origin.longitude) * scale, y: origin.latitude - point.latitude
+  let unwrapped = 0;
+  const longitudes = route.map((point, index) => {
+    if (index) unwrapped += longitudeDelta(point.longitude - route[index - 1].longitude);
+    return unwrapped;
+  });
+  const projected = route.map((point, index) => ({
+    x: longitudes[index] * scale, y: origin.latitude - point.latitude
   }));
+  if (position) {
+    let nearest = 0;
+    for (let index = 1; index < route.length; index++) {
+      if (bearingAndDistance(position, route[index]).distance < bearingAndDistance(position, route[nearest]).distance) nearest = index;
+    }
+    // Keep the manual marker on the same longitude copy as its nearest route point.
+    const longitude = route.length ? longitudes[nearest] + longitudeDelta(position.longitude - route[nearest].longitude) : 0;
+    projected.push({ x: longitude * scale, y: origin.latitude - position.latitude });
+  }
   const minX = Math.min(...projected.map(point => point.x)), maxX = Math.max(...projected.map(point => point.x));
   const minY = Math.min(...projected.map(point => point.y)), maxY = Math.max(...projected.map(point => point.y));
   const span = Math.max(maxX - minX, maxY - minY, 0.000001);

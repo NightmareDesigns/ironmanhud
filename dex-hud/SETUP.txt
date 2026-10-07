@@ -143,8 +143,10 @@ the old external map launcher entirely: no geo intent, map app, paid service,
 API key, routing provider or generated street turns. The idle left panel shows
 North/East/West/etc from Android TYPE_ROTATION_VECTOR when reliable. It reports
 PHONE screen-up orientation relative to MAGNETIC north, not glasses/head pose.
-Each HUD remaps the sensor axes to its own display rotation, including secondary
-displays. Missing/stale/unreliable sensors show a status, never a guessed cardinal.
+Both HUDs remap the sensor axes using the default HANDSET display rotation,
+never the glasses/Presentation display rotation. Rotating only an external display
+must not change the reported phone heading. Missing/stale/unreliable sensors or
+unavailable handset display orientation show a status, never a guessed cardinal.
 Hold the phone flatter and calibrate away from magnets if requested. True-north
 GPS travel course, when sufficiently fast and accurate, is separately labelled;
 it never replaces the magnetic compass or becomes the bearing to the target.
@@ -378,7 +380,9 @@ On Pixel 10 Pro XL and S23:
    produce no fictional metadata. Enable Compass / offline navigation on both
    Pixel and S23: test idle cardinal against phone orientation, all four phone
    and external display rotations, magnets/poor calibration and unavailable
-   sensors. No target bearing should masquerade as magnetic heading.
+   sensors. Phone and external HUD must agree; rotate only the external display
+   and verify the phone heading does not change. No target bearing should
+   masquerade as magnetic heading.
    Paste walking/driving paths; reject NaN/Infinity/out-of-range/malformed input,
    >100 points and >20k characters with explicit errors. Check single-point
    direct-bearing wording, multi-point sketch, wrapped labels and portrait scroll.

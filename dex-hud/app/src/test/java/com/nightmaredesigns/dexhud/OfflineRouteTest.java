@@ -77,6 +77,13 @@ public final class OfflineRouteTest {
             check(Math.abs(crossingSketch[i][0] - crossingSketch[i - 1][0]) < .31,
                     "Repeated date-line crossings / duplicates remain short");
         }
+        double[][] fromGreenwich = OfflineRoute.parse("0,0\n0,179.9\n0,-179.9").sketch();
+        check(Math.abs(fromGreenwich[1][0] - 179.9) < .000001, "Long first segment retained");
+        check(Math.abs(fromGreenwich[2][0] - fromGreenwich[1][0] - .2) < .000001,
+                "Last segment crosses date line east, not wrapped to first waypoint");
+        double[][] westFromGreenwich = OfflineRoute.parse("0,0\n0,-179.9\n0,179.9").sketch();
+        check(Math.abs(westFromGreenwich[2][0] - westFromGreenwich[1][0] + .2) < .000001,
+                "Last segment crosses date line west, not wrapped to first waypoint");
         OfflineRoute polar = OfflineRoute.parse("90,180\n90,-180\n-90,0");
         for (double[] point : polar.sketch()) {
             check(Double.isFinite(point[0]) && Double.isFinite(point[1]), "Finite polar sketch");

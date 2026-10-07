@@ -7,6 +7,7 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.hardware.display.DisplayManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -14,6 +15,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.view.Display;
 import android.view.Surface;
 
 import java.util.Locale;
@@ -313,9 +315,15 @@ final class NavigationController implements SensorEventListener, LocationListene
             return guidance;
         }
 
-        String phoneHeading(int rotation) {
+        String phoneHeading() {
             if (matrix == null) return compassStatus + "\nMagnetic north • phone, NOT glasses pose";
             if (SystemClock.elapsedRealtime() > compassExpires) return "Phone compass stale\nMagnetic north • phone, NOT glasses pose";
+            DisplayManager displays = (DisplayManager) context.getSystemService(Context.DISPLAY_SERVICE);
+            Display handset = displays == null ? null : displays.getDisplay(Display.DEFAULT_DISPLAY);
+            if (handset == null || !handset.isValid()) {
+                return "Phone display orientation unavailable\nMagnetic north • phone, NOT glasses pose";
+            }
+            int rotation = handset.getRotation();
             int x = SensorManager.AXIS_X, y = SensorManager.AXIS_Y;
             switch (rotation) {
                 case Surface.ROTATION_90: x = SensorManager.AXIS_Y; y = SensorManager.AXIS_MINUS_X; break;
