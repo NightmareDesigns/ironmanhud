@@ -6,15 +6,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Jessica • HUD-only</title>
   <link rel="stylesheet" href="hud.css">
+  <script src="dot-matrix.js" defer></script>
   <script src="hud.js" defer></script>
 </head>
 <body>
+  <div id="hud-content">
   <header><span>JESSICA / HUD</span><time id="clock"></time></header>
   <main>
     <div id="reactor" aria-hidden="true"><div class="ring outer"></div><div class="ring inner"></div><div class="reticle"></div><span>J</span></div>
+    <section id="dot-module"><canvas id="dot-matrix" width="540" height="156" aria-label="Output-reactive dot matrix"></canvas><p id="dot-source">OUTPUT / SILENT</p></section>
     <p id="mode">STANDBY</p>
     <div class="status"><div><b id="provider">OFFLINE</b><span>CHAT UPLINK</span></div><div><b id="live">OFFLINE</b><span>VOICE CHANNEL</span></div></div>
   </main>
+  <aside id="assistant-box" class="hidden"><h2>ASSISTANT SIDE CHANNEL</h2><p id="assistant-text"></p><small id="assistant-state">STANDBY</small><p class="disclosure">NEW OUTPUT ONLY / NO NOTIFICATION OR SMS MIRROR</p></aside>
   <footer>CONTROLS ON PC / ESC TO EXIT / NO AUDIO CAPTURE</footer>
+  </div>
 </body>
 </html>

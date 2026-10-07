@@ -48,7 +48,6 @@ jobs:
           retention-days: 14
 
   windows:
-    needs: android
     runs-on: windows-latest
     timeout-minutes: 30
     defaults:
@@ -65,12 +64,10 @@ jobs:
         run: npm ci
       - name: Check desktop JavaScript syntax
         run: |
-          node --check main.js
-          node --check preload.js
-          node --check renderer.js
-          node --check mic-worklet.js
-          node --check hud-preload.js
-          node --check hud.js
+          Get-ChildItem -File -Filter *.js | ForEach-Object {
+            node --check $_.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
       - name: Package Windows desktop HUD
         run: npm run package:win
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

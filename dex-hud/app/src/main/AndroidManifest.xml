@@ -1,5 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <queries>
         <package android:name="com.google.android.apps.bard" />
         <intent>
@@ -26,5 +30,19 @@
             <meta-data android:name="com.samsung.android.dex.launchwidth" android:value="1280" />
             <meta-data android:name="com.samsung.android.dex.launchheight" android:value="720" />
         </activity>
+        <service
+            android:name=".PlaybackCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection"
+            android:stopWithTask="true" />
+        <service
+            android:name=".HudNotifications"
+            android:exported="true"
+            android:label="Jessica HUD • public notifications only"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

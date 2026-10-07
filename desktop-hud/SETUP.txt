@@ -2,9 +2,10 @@ JESSICA HUD - WINDOWS PC EDITION
 
 BUILD AND LAUNCH
 GitHub Actions: run the workflow named "Build Jessica DeX APK".
-The Windows packaging job waits for the Android APK job to succeed.
-When the workflow completes, download Jessica-Windows-x64 alongside
-Jessica-DeX-APK from the workflow run's Artifacts section.
+The Windows packaging and Android APK jobs run independently.
+Download Jessica-Windows-x64 from the workflow run's Artifacts section if
+the Windows job succeeds, even if Android fails. Jessica-DeX-APK is available
+separately only if the Android job succeeds.
 Extract Jessica-Windows-x64 and launch JessicaHUD.exe from its portable
 folder. Jessica-DeX-APK is the separate Android phone build, not a PC app.
 
@@ -40,12 +41,22 @@ In Jessica's Second-screen HUD card, select the glasses' secondary display
 by its label/ID and resolution, then choose Show HUD. The app does not guess
 which monitor is XREAL and does not open the glasses window automatically.
 The selected screen receives only a borderless, full-screen black HUD with
-outline reactor graphics, a clock, provider and processing/voice status.
+optional reactor graphics, clock, output-reactive dot matrix, provider and
+processing/voice status. Choose modules in the central Settings tab.
 Chat, settings and controls stay on the Windows main display; the control
 window is kept within that display's work area. No API key is needed
 to show the HUD. Chat/API credentials remain optional, separate features.
-The HUD does not receive keys, prompts, conversation text, saved history,
-Live transcripts or microphone/audio data. It cannot start provider calls.
+By default, the HUD receives only module switches, status and numeric output
+level. Its assistant side box is OFF by default. Explicitly enable that module
+to share up to 1,200 characters of NEW assistant output: streamed chat replies
+or Gemini OUTPUT transcription. User prompts, input transcription, saved
+history, keys and audio buffers are never forwarded to the HUD. Assistant
+replies can still repeat sensitive information from a prompt: enable this
+only when safe to display them. Disabling clears the text and in-memory
+sharing buffers immediately; enabling does not replay earlier replies.
+New chat, provider/model changes, stopping a request and stopping Live clear
+shared output. Old/canceled requests cannot repopulate it. Output sharing
+is not saved or exported, and the HUD cannot start provider calls.
 
 Use Close HUD or press Escape while the PC controls are focused to exit.
 Opening the HUD does not take keyboard focus from the PC. The existing
@@ -56,12 +67,38 @@ Display changes refresh the selector; choose a secondary screen again
 after reconnecting. Display choices are not saved across application runs.
 Closing Jessica's PC window also closes the HUD. Resolution/scale changes
 update its bounds or close it safely if placement cannot be maintained.
+Settings offers opt-in keyboard / standard HID controls, OFF by default:
+F8 pauses/resumes reactor, waveform and dot-matrix visual effects only
+(audio is not paused); F9 shows/closes the explicitly selected HUD display.
+These shortcuts operate only while the PC app is focused, not in input
+fields, during dialogs, with modifiers, or on key-repeat. No global keyboard
+hook is installed, and the glasses HUD remains non-focusable/display-only.
+Glasses buttons work only if the hardware/driver exposes standard keyboard
+events mapped to F8/F9. Hardware brightness controls often are not exposed
+that way; Jessica cannot intercept them or change glasses brightness.
+Head movement/tracking is not available through a generic Electron monitor.
+It requires a device-specific sensor SDK, which this app does not integrate.
+No movement-based interaction or simulated head tracking is provided.
+Shortcut opt-in persists; visual pause is session-only. Disabling shortcuts
+resumes effects. Escape/Close HUD remain available regardless of opt-in.
+The Settings HUD brightness slider provides real SOFTWARE dimming from
+10% to 100%, applied when released and saved across app restarts. It adjusts
+opacity of the entire glasses content layer (clock, text, dots, reactor,
+assistant panel and footer) over a pure-black background. It does not dim
+the PC controls or change monitor backlight/hardware brightness. Reset HUD
+brightness restores this app's content opacity to the default 100% only.
+Older preferences without brightness settings migrate to 100%.
+Generic HDMI/DisplayPort display output does not control glasses hardware
+brightness, electrochromic tint, IPD, or head/movement sensor settings.
+Use the appropriate XREAL device buttons/vendor controls for supported
+hardware settings. This is not an "all glasses hardware settings" menu,
+and no device sensor SDK or simulated movement control is included.
 If no secondary display appears, check Extend mode, cable and video support.
 This is a conventional monitor view, not spatial AR or head tracking.
 Physical Windows/XREAL dual-display testing is still required on your setup.
 
 CHAT UPLINK
-Open Uplink. Select OpenRouter, Groq or Cerebras. Enter the matching API key
+Open Settings > Chat Uplink. Select OpenRouter, Groq or Cerebras. Enter the matching API key
 and press Set key. Keys exist only in application memory and are forgotten
 when the application closes. They are not saved, exported or printed.
 Use Forget this provider key to remove a key before closing.
@@ -76,6 +113,10 @@ account-dependent and limited, not an assurance that all usage is free.
 Check provider account plans, usage quotas and billing before sending.
 An exact Groq/Cerebras model ID can be entered when the catalog is unavailable.
 No API credential or paid account is bundled.
+The "Open OpenRouter website" button instead opens https://openrouter.ai/chat
+in your normal browser, without entering an API key into this app. Website
+chat has its own login, model and usage limits and is not linked to the HUD.
+Free-model API chat inside Jessica still requires an authenticated API key.
 
 Text responses stream live. Stop cancels a request; Retry resends the failed
 turn, excluding the incomplete assistant response. Retrying can consume quota.
@@ -86,7 +127,7 @@ Messages are sent directly to the selected provider, not a Jessica server.
 Treat your conversation content as data shared with that provider.
 
 LOCAL HISTORY
-Saving is OFF by default. Enable it in Uplink, then press Save locally.
+Saving is OFF by default. Enable it in Settings, then press Save locally.
 At most 20 chats are retained, each at most 60 turns/100,000 characters.
 Active chat history is bounded; start a new chat when its limit is reached.
 Archive supports local search, opening and deletion. Disabling local saving
@@ -116,6 +157,56 @@ Provider keys remain in memory; Live never reuses a chat-provider key.
 The official socket authenticates using the Gemini key in its connection URL;
 the app never logs that URL. Avoid sharing network diagnostic captures.
 This app has no reconnect/autoresume: a fresh explicit start is required.
+The digital dot matrix uses an analyser on actual outgoing PCM playback,
+not microphone input or queued-but-unplayed chunks. It becomes idle during
+silence, interruption or stop. With "Read completed chat replies aloud",
+OpenRouter/Groq/Cerebras text can use a local system speech voice; this is
+OFF by default and depends on voices available on your system. For that
+path, the dots indicate speech activity from utterance events, NOT measured
+amplitude. Stop reading, new chat, a new request, provider/model changes,
+starting Live, disabling reading and exit cancel local speech.
+No audio or response link to an installed phone Gemini app, browser chat,
+or any other desktop AI app is provided. Gemini Live here is the API
+integration, not a hook into the phone app.
+Samsung Galaxy AI/Bixby features are available on supported Samsung phones,
+subject to device, region, account and feature availability. Use the phone's
+assistant or supported phone controls; this Electron PC app does not embed
+Galaxy AI/Bixby, provide a Samsung assistant API or PC launcher, or bridge
+the phone assistant's audio/transcripts into this HUD.
+
+CENTRAL SETTINGS / OPTIONAL PC TOOLS
+Module choices and optional local speech are validated and persisted.
+Existing preferences from older desktop builds retain provider, model,
+Live model and history choices; new privacy-sensitive modules start OFF.
+Clock, reactor and dots start ON and can be individually hidden both on
+the PC preview and the black glasses HUD. Reduced-motion settings are honored.
+The assistant side box sits alongside local message notices; it reports
+locally refreshed assistant output, not a notification or phone inbox.
+
+Manual notes are session-only, at most 2,000 characters, and remain on the
+PC. They are not sent to an AI, displayed on glasses, saved or exported.
+Disabling the notes module clears them.
+
+Local music uses an explicit file chooser and renderer-only HTML audio
+playback. Import up to 50 audio files, at most 100 MiB each / 500 MiB total.
+Import does not autoplay. Select tracks; use Play/Pause, Previous/Next and
+Volume. During playback, completed tracks advance until the playlist ends.
+Codec support depends on Electron; MP3/WAV/OGG are good starting choices.
+Playback volume feeds a real output analyser; only its numeric level reaches
+the glasses. No file paths, contents or track names go to the main process
+or HUD. Playlist object URLs are revoked on replacement, disabling and exit.
+Playlists and volume are not persisted. This player does not control other
+music applications or impersonate OS media keys. Music does not record audio
+and may continue when PC controls lose focus; the Live microphone still stops.
+
+Navigation is an explicit Google Maps website launcher. Enter an address or
+place (up to 240 characters) and click Open Google Maps directions. The
+destination is sent to Google in your default browser; Jessica does not
+capture location or provide in-HUD turn-by-turn navigation. Destinations
+are session-only and are cleared when this module is disabled.
+Only fixed HTTPS OpenRouter chat and Google Maps directions URLs may be
+launched through validated, focused-PC IPC. Arbitrary URLs, shell commands,
+automatic AI tools and background navigation are not accepted.
 
 SCOPE AND LIMITS
 The message side panel shows conversations and LOCAL application notices.
@@ -124,8 +215,9 @@ A PC cannot mirror your phone notifications through this app.
 No camera capture, spatial AR, floating real-world overlays or phone-device
 integration is implemented. PC controls and an optional display-only HUD
 are conventional desktop windows, not spatially tracked overlays.
-No background microphone, arbitrary remote URLs, external navigation, popups,
-plugins or automatic tool execution are allowed.
+No background microphone, arbitrary remote URLs, in-HUD website popups,
+plugins or automatic tool execution are allowed. External browser launch is
+limited to the two explicit, allowlisted Settings buttons described above.
 Network requests have timeouts and bounded responses/audio queues.
 Provider errors are sanitized: check your account console for account details.
 Never paste your API key into a chat message or transcript.
@@ -137,6 +229,7 @@ VALIDATION
   node --check mic-worklet.js
   node --check hud-preload.js
   node --check hud.js
+  node --check dot-matrix.js
   npm audit
   npm run package:win
 Live authenticated provider calls require your own accounts and are not
@@ -145,3 +238,15 @@ Manual Windows dual-display testing is required: verify Extend mode,
 non-primary selection, black fullscreen placement, Show/Close and Escape,
 unplug/replug, primary-display changes, resolution/scaling/layout changes,
 PC close and microphone focus-loss privacy. No Linux sandbox bypass is used.
+Also verify module persistence/migration; side-box opt-in/off clearing;
+no replay of archive/user/input transcription; canceled-request/provider
+reset races; PCM/silence/interruption dot levels; available system voices;
+local music codecs, playlist replacement/limits, volume and URL cleanup;
+and explicit browser launches without arbitrary URL or command execution.
+For optional HID/keyboard controls verify F8/F9 only with focused PC controls,
+no interception in text inputs or native/browser dialogs, no repeats/modifiers,
+no effect while another app has focus, and no HUD focus-steal on F9 opening.
+Real glasses-button support requires hardware/driver keyboard-event testing.
+Verify persisted 10%/100% content dimming includes text/clock/dots/assistant
+panel while the background stays black and PC controls remain unchanged.
+Verify reset and reject out-of-range, fractional or nonnumeric brightness.

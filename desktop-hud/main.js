@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, session, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, session, screen, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const crypto = require('node:crypto');
@@ -20,8 +20,30 @@ const keys = { openrouter: '', groq: '', cerebras: '', gemini: '' };
 let win, activeChat, live, writing = Promise.resolve();
 let hudWindow, selectedDisplayId = null, displayNotice = 'Select a secondary display. Windows must use Extend, not Duplicate.';
 let placingControls = false;
-let state = { preferences: { provider: 'openrouter', model: 'openrouter/free', liveModel: 'gemini-3.8-live', saveChats: false }, chats: [] };
+const MODULE_DEFAULTS = Object.freeze({ clock: true, reactor: true, dots: true, assistant: false, notes: false, music: false, navigation: false });
+let state = { preferences: { provider: 'openrouter', model: 'openrouter/free', liveModel: 'gemini-3.8-live',
+  saveChats: false, speakReplies: false, hudShortcuts: false, hudBrightness: 100, modules: { ...MODULE_DEFAULTS } }, chats: [] };
+let assistantText = '', assistantSource = 'NONE';
+let effectsPaused = false, dialogActive = false;
+const outputLevels = { gemini: { level: 0, time: 0 }, music: { level: 0, time: 0 }, speech: { level: 0, time: 0 } };
 const text = (value, max) => typeof value === 'string' && value.length <= max;
+const exactObject = (value, fields) => value && typeof value === 'object' && !Array.isArray(value) &&
+  Object.keys(value).length === fields.length && fields.every(field => Object.hasOwn(value, field));
+function validPreferences(value, migrate = false) {
+  if (!value || !providerOK(value.provider) || !modelOK(value.model) ||
+    !modelOK(value.liveModel) || typeof value.saveChats !== 'boolean') return null;
+  const modules = migrate && value.modules === undefined ? { ...MODULE_DEFAULTS } : value.modules;
+  const speakReplies = migrate && value.speakReplies === undefined ? false : value.speakReplies;
+  const hudShortcuts = migrate && value.hudShortcuts === undefined ? false : value.hudShortcuts;
+  const hudBrightness = migrate && value.hudBrightness === undefined ? 100 : value.hudBrightness;
+  if ((!migrate && !exactObject(value, ['provider', 'model', 'liveModel', 'saveChats', 'speakReplies', 'hudShortcuts', 'hudBrightness', 'modules'])) ||
+    !exactObject(modules, Object.keys(MODULE_DEFAULTS)) ||
+    !Object.keys(MODULE_DEFAULTS).every(key => typeof modules[key] === 'boolean') ||
+    typeof speakReplies !== 'boolean' || typeof hudShortcuts !== 'boolean' ||
+    !Number.isInteger(hudBrightness) || hudBrightness < 10 || hudBrightness > 100) return null;
+  return { provider: value.provider, model: value.model, liveModel: value.liveModel,
+    saveChats: value.saveChats, speakReplies, hudShortcuts, hudBrightness, modules: { ...modules } };
+}
 const modelOK = value => text(value, 160) && /^[a-zA-Z0-9_.:/-]+$/.test(value);
 const idOK = value => text(value, 80) && /^[a-zA-Z0-9-]+$/.test(value);
 const providerOK = value => Object.hasOwn(ENDPOINTS, value);
@@ -33,14 +55,41 @@ function send(channel, payload) {
   if (channel === 'live-event' && ['ready', 'closed'].includes(payload.type)) publishHudStatus();
 }
 function hudStatus() {
+  const now = Date.now();
+  const levels = Object.entries(outputLevels).map(([source, value]) => ({
+    source, level: now - value.time < 600 ? value.level : 0
+  })).sort((a, b) => b.level - a.level);
   return {
     mode: live?.ready ? 'LIVE LINK' : activeChat ? 'PROCESSING' : 'STANDBY',
     provider: state.preferences.provider.toUpperCase(),
-    live: live?.ready ? 'LISTENING' : live ? 'CONNECTING' : 'OFFLINE'
+    live: live?.ready ? 'LISTENING' : live ? 'CONNECTING' : 'OFFLINE',
+    modules: { clock: state.preferences.modules.clock, reactor: state.preferences.modules.reactor,
+      dots: state.preferences.modules.dots, assistant: state.preferences.modules.assistant },
+    assistantText: state.preferences.modules.assistant ? assistantText : '',
+    assistantSource: state.preferences.modules.assistant ? assistantSource : 'NONE',
+    assistantPending: Boolean(activeChat),
+    effectsPaused,
+    brightness: state.preferences.hudBrightness,
+    level: levels[0].level, audioSource: levels[0].level > 0 ? levels[0].source.toUpperCase() : 'SILENT'
   };
 }
 function publishHudStatus() {
-  if (hudWindow && !hudWindow.isDestroyed()) hudWindow.webContents.send('hud-status', hudStatus());
+  const value = hudStatus();
+  send('hud-status', value);
+  if (hudWindow && !hudWindow.isDestroyed()) hudWindow.webContents.send('hud-status', value);
+}
+function clearAssistant() {
+  assistantText = '';
+  assistantSource = 'NONE';
+  if (activeChat) activeChat.hudText = '';
+  if (live) live.hudText = '';
+}
+function assistantOutput(operation, source, chunk) {
+  if (!state.preferences.modules.assistant) return;
+  operation.hudText = ((operation.hudText || '') + chunk).slice(-1200);
+  assistantText = operation.hudText;
+  assistantSource = source;
+  publishHudStatus();
 }
 function secondaryDisplay(id) {
   const primary = screen.getPrimaryDisplay();
@@ -121,13 +170,23 @@ function persist() {
   });
   return writing;
 }
-function stopChat() {
-  if (activeChat) activeChat.abort.abort();
+function stopChat(message = 'Request stopped. You can retry.') {
+  const old = activeChat;
+  activeChat = undefined;
+  if (old) {
+    old.abort.abort();
+    send('chat-event', { id: old.id, type: 'error', message });
+  }
+  clearAssistant();
+  outputLevels.speech.level = 0;
+  publishHudStatus();
 }
 function stopLive(reason = 'Live session stopped.') {
   if (!live) return;
   const old = live;
   live = undefined;
+  clearAssistant();
+  outputLevels.gemini.level = 0;
   clearTimeout(old.timer);
   clearTimeout(old.durationTimer);
   old.socket.close();
@@ -162,9 +221,16 @@ async function limitedJSON(response) {
 }
 async function streamChat(request, operation) {
   const { provider, model, messages, id } = request;
-  let timer = setTimeout(() => operation.abort.abort(), 120000);
+  const timer = setTimeout(() => {
+    if (activeChat === operation) stopChat('Request timed out. You can retry.');
+  }, 120000);
   let reader;
-  const finish = (type, message) => send('chat-event', { id, type, message });
+  const finish = (type, message) => {
+    if (activeChat !== operation || operation.abort.signal.aborted) return;
+    activeChat = undefined;
+    publishHudStatus();
+    send('chat-event', { id, type, message });
+  };
   try {
     const response = await fetch(ENDPOINTS[provider], {
       method: 'POST',
@@ -184,6 +250,7 @@ async function streamChat(request, operation) {
     let completed = false;
     while (!completed) {
       const { done, value } = await reader.read();
+      if (activeChat !== operation || operation.abort.signal.aborted) return;
       if (done) break;
       incomingBytes += value.byteLength;
       if (incomingBytes > 2000000) throw new Error('Incoming stream limit');
@@ -204,6 +271,7 @@ async function streamChat(request, operation) {
           total += delta.length;
           if (total > 20000) throw new Error('Output limit');
           hasText ||= delta.trim().length > 0;
+          assistantOutput(operation, 'CHAT', delta);
           send('chat-event', { id, type: 'delta', text: delta });
         }
         if (choice?.finish_reason != null) {
@@ -218,7 +286,7 @@ async function streamChat(request, operation) {
     if (!completed || !hasText) throw new Error('Incomplete or empty response');
     finish('done', 'Response complete.');
   } catch {
-    finish('error', operation.abort.signal.aborted ? 'Request stopped or timed out. You can retry.' : 'Connection interrupted or response limit reached. You can retry.');
+    finish('error', 'Connection interrupted or response limit reached. You can retry.');
   } finally {
     clearTimeout(timer);
     if (reader) await reader.cancel().catch(() => {});
@@ -226,6 +294,37 @@ async function streamChat(request, operation) {
   }
 }
 handle('initialize', () => state);
+handle('read-hud-status', payload => payload === undefined ? hudStatus() : { error: 'Invalid request.' });
+handle('clear-assistant', payload => {
+  if (payload !== undefined) return { error: 'Invalid request.' };
+  clearAssistant();
+  publishHudStatus();
+  return { ok: true };
+});
+handle('output-level', value => {
+  if (!exactObject(value, ['source', 'level']) || !Object.hasOwn(outputLevels, value.source) ||
+    !Number.isFinite(value.level) || value.level < 0 || value.level > 1) return { error: 'Invalid output level.' };
+  if ((value.source === 'gemini' && !live?.ready) ||
+    (value.source === 'music' && !state.preferences.modules.music) ||
+    (value.source === 'speech' && (!state.preferences.speakReplies || value.level !== 0 && value.level !== 1))) return { ok: false };
+  outputLevels[value.source] = { level: value.level, time: Date.now() };
+  return { ok: true };
+});
+handle('open-website', async value => {
+  if (!win.isFocused() || !value) return { error: 'Use the launch button in the focused PC window.' };
+  let target;
+  if (exactObject(value, ['site']) && value.site === 'openrouter') target = new URL('https://openrouter.ai/chat');
+  else if (exactObject(value, ['site', 'destination']) && value.site === 'maps' && state.preferences.modules.navigation &&
+    text(value.destination, 240) && value.destination.trim() && !/[\x00-\x1f\x7f]/.test(value.destination)) {
+    target = new URL('https://www.google.com/maps/dir/');
+    target.searchParams.set('api', '1');
+    target.searchParams.set('destination', value.destination.trim());
+  } else return { error: 'Invalid website or destination.' };
+  if (target.protocol !== 'https:' || !['openrouter.ai', 'www.google.com'].includes(target.hostname) ||
+    target.username || target.password || target.port) return { error: 'Website rejected.' };
+  await shell.openExternal(target.href);
+  return { ok: true };
+});
 handle('displays', payload => payload === undefined ? displayState() : { error: 'Invalid request.' });
 handle('select-display', id => {
   if (!Number.isSafeInteger(id) || !secondaryDisplay(id)) {
@@ -238,7 +337,7 @@ handle('select-display', id => {
   publishDisplays();
   return displayState();
 });
-handle('show-hud', async payload => {
+async function showHud(payload) {
   if (payload !== undefined) return { error: 'Invalid request.' };
   keepControlsOnPrimary();
   const display = secondaryDisplay(selectedDisplayId);
@@ -290,6 +389,21 @@ handle('show-hud', async payload => {
   publishHudStatus();
   publishDisplays();
   return displayState();
+}
+handle('show-hud', showHud);
+handle('hud-shortcut', async value => {
+  if (!state.preferences.hudShortcuts || !win.isFocused() || dialogActive ||
+    !exactObject(value, ['action']) || !['toggle-fx', 'toggle-hud'].includes(value.action)) return { error: 'HUD shortcut unavailable.' };
+  if (value.action === 'toggle-fx') {
+    effectsPaused = !effectsPaused;
+    publishHudStatus();
+    return { ok: true, effectsPaused };
+  }
+  if (hudWindow && !hudWindow.isDestroyed()) {
+    closeHud();
+    return displayState();
+  }
+  return showHud();
 });
 handle('close-hud', payload => {
   if (payload !== undefined) return { error: 'Invalid request.' };
@@ -314,10 +428,14 @@ handle('set-key', value => {
   return { ok: true };
 });
 handle('preferences', async value => {
-  if (!value || !providerOK(value.provider) || !modelOK(value.model) ||
-    !modelOK(value.liveModel) || typeof value.saveChats !== 'boolean') return { error: 'Invalid preferences.' };
-  if (state.preferences.provider !== value.provider) stopChat();
-  state.preferences = { provider: value.provider, model: value.model, liveModel: value.liveModel, saveChats: value.saveChats };
+  const next = validPreferences(value);
+  if (!next) return { error: 'Invalid preferences.' };
+  if (state.preferences.provider !== next.provider || state.preferences.model !== next.model) stopChat();
+  if (!next.modules.assistant) clearAssistant();
+  if (!next.modules.music) outputLevels.music.level = 0;
+  if (!next.speakReplies) outputLevels.speech.level = 0;
+  if (!next.hudShortcuts) effectsPaused = false;
+  state.preferences = next;
   publishHudStatus();
   if (!value.saveChats) state.chats = [];
   await persist();
@@ -350,7 +468,8 @@ handle('chat', request => {
   if (request.provider === 'openrouter' && !request.model.endsWith(':free') && request.model !== 'openrouter/free') return { error: 'Choose a free OpenRouter model.' };
   if (!keys[request.provider]) return { error: 'Enter an API key first.' };
   if (activeChat) return { error: 'Stop the current response first.' };
-  const operation = { abort: new AbortController() };
+  const operation = { abort: new AbortController(), id: request.id, hudText: '' };
+  clearAssistant();
   activeChat = operation;
   publishHudStatus();
   void streamChat(request, operation);
@@ -374,7 +493,12 @@ handle('delete-chat', async id => {
 });
 handle('export-chat', async value => {
   if (!value || !messagesOK(value.messages) || !providerOK(value.provider) || !modelOK(value.model)) return { error: 'Invalid conversation.' };
-  const result = await dialog.showSaveDialog(win, { title: 'Export conversation (plain text, no API keys)', defaultPath: 'Jessica-chat.txt', filters: [{ name: 'Text', extensions: ['txt'] }] });
+  if (dialogActive) return { error: 'Finish the current export dialog first.' };
+  let result;
+  dialogActive = true;
+  try {
+    result = await dialog.showSaveDialog(win, { title: 'Export conversation (plain text, no API keys)', defaultPath: 'Jessica-chat.txt', filters: [{ name: 'Text', extensions: ['txt'] }] });
+  } finally { dialogActive = false; }
   if (result.canceled || !result.filePath) return { canceled: true };
   await fs.writeFile(result.filePath, `Jessica HUD • ${value.provider} • ${value.model}\n\n` +
     value.messages.map(m => `${m.role.toUpperCase()}\n${m.content}`).join('\n\n'), 'utf8');
@@ -383,6 +507,7 @@ handle('export-chat', async value => {
 handle('start-live', request => {
   if (!request || !modelOK(request.model) || !keys.gemini || !win.isFocused()) return { error: 'Live needs a Gemini key, valid model and focused window.' };
   stopLive();
+  clearAssistant();
   // The official Live API authenticates the socket with a query key. Never log this URL.
   const socket = new WebSocket(`wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(keys.gemini)}`);
   const operation = { socket, ready: false, timer: setTimeout(() => stopLive('Live connection timed out.'), 20000) };
@@ -413,14 +538,23 @@ handle('start-live', request => {
       }
       const server = data.serverContent;
       if (!server) return;
-      if (server.interrupted) send('live-event', { type: 'interrupted' });
+      if (server.interrupted) {
+        clearAssistant();
+        outputLevels.gemini.level = 0;
+        publishHudStatus();
+        send('live-event', { type: 'interrupted' });
+      }
       for (const field of ['inputTranscription', 'outputTranscription']) {
-        if (text(server[field]?.text, 20000)) send('live-event', { type: 'transcript', speaker: field === 'inputTranscription' ? 'You' : 'Jessica', text: server[field].text });
+        if (text(server[field]?.text, 20000)) {
+          if (field === 'outputTranscription') assistantOutput(operation, 'GEMINI', server[field].text);
+          send('live-event', { type: 'transcript', speaker: field === 'inputTranscription' ? 'You' : 'Jessica', text: server[field].text });
+        }
       }
       for (const part of (server.modelTurn?.parts || []).slice(0, 32)) {
         const audio = part.inlineData;
         if (audio && text(audio.data, 1000000) && /^audio\/pcm(?:;rate=24000)?$/.test(audio.mimeType)) send('live-event', { type: 'audio', data: audio.data });
       }
+      if (server.turnComplete) operation.hudText = '';
     } catch { stopLive('Live response unavailable or exceeded safety limits.'); }
   });
   socket.addEventListener('error', () => { if (live === operation) stopLive('Live connection failed. Check connectivity, key, model and account access.'); });
@@ -439,9 +573,9 @@ app.whenReady().then(async () => {
     const file = path.join(app.getPath('userData'), 'preferences.json');
     if ((await fs.stat(file)).size <= 12500000) {
       const saved = JSON.parse(await fs.readFile(file, 'utf8'));
-      const p = saved.preferences;
-      if (p && providerOK(p.provider) && modelOK(p.model) && modelOK(p.liveModel) && typeof p.saveChats === 'boolean') {
-        state.preferences = { provider: p.provider, model: p.model, liveModel: p.liveModel, saveChats: p.saveChats };
+      const p = validPreferences(saved.preferences, true);
+      if (p) {
+        state.preferences = p;
         state.chats = p.saveChats && Array.isArray(saved.chats) ? saved.chats.filter(c => c && idOK(c.id) && providerOK(c.provider) && modelOK(c.model) && messagesOK(c.messages)).slice(0, 20).map(c => ({
           id: c.id, provider: c.provider, model: c.model,
           updated: Number.isFinite(c.updated) ? c.updated : 0,
@@ -482,6 +616,8 @@ app.whenReady().then(async () => {
   win.on('close', () => closeHud());
   win.on('closed', () => { stopChat(); stopLive(); win = undefined; Object.keys(keys).forEach(k => { keys[k] = ''; }); });
   await win.loadFile('index.html');
+  const statusTimer = setInterval(publishHudStatus, 100);
+  win.on('closed', () => clearInterval(statusTimer));
 });
 app.on('window-all-closed', () => app.quit());
 app.on('before-quit', () => { closeHud(); stopChat(); stopLive(); });

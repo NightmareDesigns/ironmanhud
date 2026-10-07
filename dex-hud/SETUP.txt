@@ -1,4 +1,4 @@
-JESSICA HUD — standalone Android / Samsung DeX
+JESSICA HUD — native Android / Pixel external displays / Samsung DeX
 
 This native Java app does not use Unity, NRSDK or any XREAL SDK.
 The IronManHUD_Clean Unity project is left untouched.
@@ -10,7 +10,7 @@ BUILD AND INSTALL
    If a Copilot-triggered run shows "action required", approve it in GitHub
    before expecting a build or download. No APK exists until a run succeeds.
 2. Open the completed run and download the Jessica-DeX-APK artifact.
-3. Unzip it and copy app-debug.apk to your S23.
+3. Unzip it and copy app-debug.apk to your phone (Pixel 10 Pro XL or S23).
 4. Open it on the phone and allow installation from that source if prompted.
    This is a debug-signed APK for personal testing, not a Play Store release.
    No Unity license, signing secret or OpenRouter key is needed to build.
@@ -21,26 +21,130 @@ From the dex-hud directory run:
 On Windows use gradlew.bat instead. Set ANDROID_HOME to your Android SDK.
 Output: app/build/outputs/apk/debug/app-debug.apk
 
-DEX AND CONTROLS
-Connect the XREAL display to the S23, enter Samsung DeX, then open Jessica HUD
-on the external display. Maximize the DeX window and use Fullscreen to hide
-Android system bars where DeX allows it. Escape exits app fullscreen.
-Use Samsung's "Use phone as touchpad" feature to click the visible controls;
-this app does not implement a separate remote-control service.
+DISPLAYS AND CONTROLS
+Pixel 10 Pro XL is a priority test device alongside S23. Connect a supported
+external display/glasses, then use Display to select an Android presentation
+display. The phone retains the controls while the selected screen shows a
+black HUD. Android must expose that display; this app cannot force wired video
+output or convert mirroring into an independent screen. No overlay permission,
+Accessibility scraping, private API, Unity, NRSDK or XREAL SDK is used.
+If only an OS desktop/mirror is available, open Jessica there if supported.
+On S23, Samsung DeX and "Use phone as touchpad" are also available. Maximize the
+window and use Fullscreen where Android permits it. Escape exits fullscreen.
 The window is resizable and has no locked orientation. The control row scrolls
 horizontally in small windows. Jessica's dialog supports typed input/keyboard.
+Display choices refresh each time the chooser opens. Display add/remove/change
+events are monitored while a HUD owner is active; a resolution/density change
+recreates the Presentation using that display's resources. Disconnect dismisses
+the HUD and clears the selection; reconnect and select it again. Selection is
+memory-only, not a permanently saved display ID. There is never an activity and
+capture-service Presentation on the same selected display at the same time.
+
+CENTRAL HUD SETTINGS
+HUD Settings controls clock/date, battery, reactor decoration, style, Matrix
+rain, animation, AI reply panel, digital dots, notifications, music, the
+navigation launcher, external button shortcuts and HUD content brightness.
+Choices are saved and apply to both HUDs.
+Notification, music and navigation modules default OFF. Playback capture also
+starts OFF and is never automatically restarted or saved as enabled.
 The default Minimal style uses a pure-black background with a thin border.
 Style also offers Reactor (outline rings, no glow) and Terminal (text only).
 Matrix rain adds faint green falling code over black to any style; it is off
-by default. Toggle it off for the clearest glasses view. Pause FX freezes both
-the rings and code while keeping the clock and battery updating. Style, Matrix
-and motion choices are saved and applied to the phone and secondary HUD.
+by default. Toggle it off for the clearest glasses view. Disable Animate FX to
+freeze decorative rings/rain; live playback levels and enabled clock still
+update. Battery broadcasts are registered only while an active HUD needs the
+battery module; disabled notification/audio modules do not process their data.
 Clock and battery are real. The reactor is fictional visual decoration.
-No weather, notifications, hand tracking or eye tracking is implemented.
+No weather, hand tracking or eye tracking is implemented.
+
+HUD DIMMING / GLASSES SETTINGS
+HUD Settings > HUD content brightness provides a saved 10–100% slider (default
+100%) and Reset HUD brightness to 100%. It applies one content-alpha layer to
+ALL rendered HUD accents, clock/battery/assistant/notification text, reactor,
+Matrix and audio dots/panel borders on both the phone and the service-owned
+external HUD. The background remains opaque pure black at every level. This is
+content dimming, not a screen-brightness API; no WRITE_SETTINGS permission or
+Android display brightness changes are used. The 10% minimum prevents complete
+blackout, but low levels may be difficult to read in bright surroundings.
+Phone settings/buttons remain undimmed so brightness can always be reset.
+Hardware brightness, electrochromic tint, IPD and 3DoF/head tracking cannot be
+set through generic Android Presentation. No fake hardware sliders are provided.
+Use the glasses' physical buttons or vendor app where the hardware supports
+those functions. Available hardware settings and effects require device testing.
+
+EXTERNAL BUTTON SHORTCUTS — OPT-IN, NOT PROPRIETARY GLASSES CONTROL
+Enable External button shortcuts in HUD Settings (OFF by default), close the
+dialog and tap the phone HUD to focus it. The external Presentation's HUD is
+focusable too. If Android delivers standard unmodified key events to that
+focused HUD window: DPAD Left/Right cycles Minimal/Reactor/Terminal, and
+Space/Enter/DPAD Center toggles decorative animation. Holding a key does not
+repeat the action. Style/motion changes persist and update both HUDs.
+Shortcuts only run on the focused HUD view in a focused app window, never in
+EditText, dialogs, control buttons or another app's window. A keyboard/remote
+must actually send these Android key codes; this is not a global interceptor.
+Volume and media keys are not remapped or swallowed by shortcuts: Android and
+the current music player retain their ordinary behavior. Music's on-screen
+controls remain separately opt-in.
+Physical XREAL brightness/volume buttons may operate entirely inside the glasses
+and may NOT deliver any Android app key events. No proprietary button mapping
+or compatibility is promised. Generic Android Presentation does not expose
+glasses head pose/movement sensors; head tracking/movement control is NOT
+implemented. No sensor/Accessibility bridge or SDK has been added. Hardware
+testing is required on your particular glasses, adapter, phone and OS.
+
+AI REPLY / NOTIFICATION SIDE BOX
+The right-side panel (below the visual on narrow portrait windows) wraps the
+latest in-HUD API reply. It holds at most 4,000 characters, in memory only;
+long replies are visibly ellipsized to fit. Optional API chat shows its bounded
+chat separately. HUD Settings > Paste / type an AI reply provides a manual
+alternative for external assistants. Use the system Paste menu yourself;
+Jessica never automatically reads the clipboard. Manual text is explicitly
+labelled, is not a live transcript and is not sent to an AI provider.
+Clear AI reply removes that HUD text. API chat history is separate.
+HUD reply/notification text and the listener cache also clear when Jessica's
+activity stops without approved capture, on actual activity destruction, and
+when capture ends/revokes/stops. During an approved capture handoff they remain
+memory-only so the service-owned external panel can continue. Explicitly enabled
+notification access may receive new eligible items afterward; old cached text
+is not republished. Actual activity destruction clears optional API credentials
+and chat history too. Configuration changes may preserve an approved capture's
+HUD text, but API keys/history are not retained across activity recreation.
+
+PUBLIC NOTIFICATIONS — OPTIONAL, ANDROID 8.1+
+Enable Public notifications in HUD Settings, accept the privacy disclosure,
+then explicitly grant Jessica notification access using the system settings
+button. Android grants broad listener access; Jessica filters its processing
+to public, non-ongoing, non-group-summary notifications while enabled. It never
+reads private/secret notification bodies, private expanded views, or SMS.
+Only package name and bounded title/text are shown (4 recent eligible items;
+100 title + 256 body characters each, 1,600-character display bound).
+Private/secret notifications and likely OTP/password/authentication/financial
+text are excluded. This conservative filter can hide legitimate notifications
+and cannot guarantee redaction of all sensitive public text. Normal private
+chat/SMS notifications are intentionally not displayed; notification permission
+is not a promise to show every message.
+Text and the listener cache exist only in memory: no persistence, logging,
+export, clipboard copy or insertion into provider prompts. Removal updates the
+cache; disable, clear, listener disconnection/access revocation or process exit
+clears it. Disabling unbinds the listener; enabling requires the module AND
+system access. Revoke access in Android settings whenever desired.
+
+MUSIC AND NAVIGATION — MANUAL LAUNCHERS
+Enable Music controls to reveal its phone control. Open system music app uses
+Android's music-app selector; some phones have no default music app, in which
+case open your preferred player yourself. Previous / Play-pause / Next dispatch
+public Android system media keys. A running player/session is needed and the
+player decides whether it responds. No track metadata, notification access,
+media-session monitoring or automatic music detection is claimed.
+Enable Navigation launcher, enter an address/destination (maximum 300
+characters), then Open map sends an encoded geo ACTION_VIEW search to a map
+app. Pick a route and start navigation inside that app. Jessica requests no
+location permission, does not read GPS/routes and does not display real
+turn-by-turn telemetry. A geo-capable installed map app is required.
 
 JESSICA / GEMINI LIVE — NO GEMINI API KEY
 The HUD works offline. Jessica > Open Gemini, or Gemini / Live in the control
-row, launches Google's installed Gemini app on your S23 without an API key.
+row, launches Google's installed Gemini app on your phone without an API key.
 Start Live using the Live control inside Gemini. Google sign-in, supported
 account/device/language and internet availability are governed by Google.
 If Gemini cannot be opened, Jessica shows instructions instead of asking for
@@ -50,16 +154,79 @@ Your phone's assistant gesture/side button is also available.
 This is an app handoff, NOT embedded Gemini Live or an on-device AI model.
 There is no supported Live-session bridge implemented here: Jessica cannot
 automatically start Live, access its microphone, send it HUD/chat text or
-display its replies. Gemini controls its own screen, audio and privacy.
-Opening another app stops Jessica polling and speech and may close a separate
-HUD when Android stops Jessica's activity. Return to Jessica and reselect
-Display if needed; an always-visible overlay during Gemini Live is not provided.
+display its replies automatically. Gemini controls its own screen/audio/privacy.
+Opening another app stops Jessica API polling and app-owned speech. Without
+approved playback capture, stopping Jessica's activity closes its Presentation;
+the selected display is restored when returning, if still connected.
+With capture active, a foreground service owns the selected external HUD and
+keeps it visible during the handoff. There is no always-visible PHONE overlay:
+when Gemini covers Jessica on the phone, only the selected external HUD remains
+visible. An external transcript is still unavailable even if audio is captured.
+
+SAMSUNG AI / BIXBY — OPTIONAL KEY-FREE HANDOFF
+Jessica and central HUD Settings both offer Samsung AI / Bixby > setup.
+On a Samsung-manufactured phone, a confirmation explains that Bixby must be
+enabled and selected as the default assistant in system settings where supported.
+Open configured assistant uses the same public Android ACTION_VOICE_COMMAND
+handoff as Phone assistant. It invokes whatever assistant your phone is actually
+configured to use; it does not guarantee Bixby when Gemini/another app is default
+or Bixby is unavailable. Samsung device/account/region requirements still apply.
+Galaxy AI features live in supported Samsung apps. Jessica does not embed
+Bixby/Galaxy AI, call a Samsung AI API, invent endpoints or undocumented intents,
+forward HUD text, scrape replies or receive transcripts. No Samsung API key is
+entered in this HUD.
+On Pixel/non-Samsung devices the route explicitly shows unavailable device,
+with a separate Standard assistant option. It does not claim Samsung apps or
+Galaxy AI are installed on Pixel. If Android cannot resolve the generic handoff,
+use your configured phone assistant gesture/side button instead.
+
+DIGITAL DOT MATRIX / PLAYBACK LEVELS — ANDROID 10+
+Enable Digital dot matrix, select the external display if desired, then choose
+Start playback visualization in HUD Settings. Read the disclosure, grant
+RECORD_AUDIO runtime permission and approve Android's screen-sharing consent.
+On Android 13+, notification permission is also requested so the foreground
+notification and its STOP action can appear in the notification drawer.
+POST_NOTIFICATIONS is NOT a prerequisite for capture; RECORD_AUDIO and
+MediaProjection consent are. If notifications are denied,
+use HUD Settings to stop or Android's active-app controls; the ongoing service
+may only appear in Android's task manager.
+This is AudioPlaybackCapture, NOT microphone capture. Despite Android's audio
+permission wording, no microphone AudioRecord source or fallback is used.
+The screen-sharing token is used only to authorize playback capture; no virtual
+screen/display frames, screenshot, file or network audio stream is created.
+Short PCM buffers are reduced to coarse RMS amplitude levels in memory (~10
+updates/sec) for dots on the phone and selected glasses/display. Dots are an
+amplitude visual, not a frequency analyzer, AI speech detector or transcript.
+Any eligible playback can move them, not just an AI voice. Nothing is
+transcribed, stored, logged or sent to OpenRouter/other providers.
+Android permits only eligible MEDIA, GAME or UNKNOWN playback usage in the
+same user profile, subject to each source app's capture policy. Apps can deny
+capture; assistant/voice-communication usage may not be eligible. Gemini Live,
+other AI apps, DRM media and your device/audio route may produce no capturable
+audio. "No capturable audio / silent or blocked" is shown rather than fake
+speech or a guaranteed Gemini connection. Silence and policy denial cannot be
+distinguished reliably. Test source eligibility on the actual device.
+When optional API replies are spoken by Jessica's Android TTS and capture is
+off, dots animate on utterance begin/end; the HUD labels this TIMING ONLY,
+NOT RMS. The visual is not a measurement of that TTS voice's amplitude.
+Capture starts only after user action/consent and uses an unexported
+mediaProjection foreground service. Android 14+ ordering is consent >
+startForeground(mediaProjection) > getMediaProjection > registerCallback >
+audio capture. This audio-only path does not create a virtual display.
+STOP in the notification, HUD Settings stop, disabling Digital dot matrix,
+Android projection stop/revoke, RECORD_AUDIO revocation, selected-display
+disconnect, task removal, or actual activity destruction ends capture and
+releases its recorder/projection/Presentation. Configuration changes may keep
+the approved service alive. Leaving the activity for Gemini does not by itself
+stop capture. Service restart never reuses a saved consent token. Lock-screen
+and system/OEM restrictions can also end a projection; return and consent again.
 
 JESSICA / OPENROUTER — OPTIONAL
 Jessica > OpenRouter web opens https://openrouter.ai/chat in your browser.
 No API key is entered in Jessica for that route; website sign-in, model
 availability and free-tier limits still apply. No HUD text or chat is forwarded.
-For in-HUD API chat, open Jessica > Optional API chat > Settings and enter your own
+For in-HUD API chat, open Jessica > Optional API chat > Optional API settings
+or HUD Settings > Optional authenticated API settings and enter your own
 OpenRouter API key on-device. The key is held only in memory, not written to
 storage, logs, APKs or GitHub. Restarting or recreating the activity (including
 some resize/orientation transitions) requires re-entering the key.
@@ -67,7 +234,8 @@ Only the selected model ID is saved. Never commit a key.
 Default model: openrouter/free (OpenRouter's free-model router).
 You can instead enter a currently available provider/model:free ID from
 OpenRouter's model catalog. Paid model IDs are rejected by the app.
-Free models on the API still need an account/key; availability, quotas, provider terms
+API authentication is unchanged. Free models on the API need an account/key;
+availability, quotas, provider terms
 and account restrictions can change. No unlimited access is promised.
 
 Send submits typed text in optional API chat. API voice in that dialog opens
@@ -75,7 +243,7 @@ the installed Android speech recognizer, then sends the recognized question
 to OpenRouter (or asks for its key). HUD voice in the main controls is for local
 commands; other questions launch Gemini but are NOT forwarded. Ask them again
 inside Gemini. Neither voice route is Gemini Live. There is no always-on mic.
-Enable spoken replies in Settings to use Android text-to-speech. The chosen
+Enable spoken replies in Optional API settings to use Android text-to-speech. The chosen
 system voice is used; a specific female voice is not guaranteed.
 Speech recognition and TTS availability depend on installed engines/languages
 and may use provider cloud services. Text input remains available if speech
@@ -90,8 +258,10 @@ chat are sent after each reply with a 60-second delay. Polling never reads SMS,
 notifications, clipboard, sensors or audio. It cannot supply live information
 unless you type it in. Stop polling cancels future sends, not a request already
 submitted. Errors stop polling rather than repeatedly retrying.
-Leaving the app stops polling, cancels network work and stops speech; returning
-does not restart polling. No background monitoring or autonomous actions.
+Leaving the app stops polling, cancels network work and stops app-owned speech;
+returning does not restart polling. Only explicitly enabled notification
+access and an explicitly approved playback-capture service can continue;
+neither supplies any data to API polling. No autonomous actions.
 OpenRouter and its model providers receive your prompts and recent chat.
 Chat is bounded and held only in memory; do not submit sensitive information.
 AI output is untrusted and may be inaccurate; it cannot execute app commands.
@@ -99,22 +269,52 @@ AI output is untrusted and may be inaccurate; it cannot execute app commands.
 DISPLAY LIMITATIONS
 This is a conventional fullscreen Android display app, not spatially anchored
 AR. Black reduces emitted light but does not hide the real world or provide
-camera passthrough. System/window chrome depends on Samsung DeX.
-Target device: S23 with Samsung DeX. Physical XREAL 1S compatibility must be
-tested on your setup; this repository cannot certify display behavior.
-Pixel desktop/external-display behavior needs separate testing; it isn't DeX.
+camera passthrough. System/window chrome depends on the phone/OS desktop mode.
+Priority devices: Pixel 10 Pro XL and S23 (including Samsung DeX). Physical
+XREAL 1S, source capture eligibility and display compatibility must be tested
+on your setup; this repository cannot certify hardware behavior.
+Pixel desktop/external-display behavior is Android/OEM support, not DeX.
 This APK is phone-only. The separate desktop-hud app provides Windows PC
 support and a HUD-only secondary-display window; see desktop-hud/SETUP.txt.
 
-PIXEL / SECONDARY-DISPLAY MODE
-No DeX clone is necessary to display a single HUD app. Connect a supported
-external display and open Display > select the glasses/display. Android's
-Presentation API draws the HUD on the external screen, leaving controls and
-Jessica chat on the phone. HUD status, styles, colors and animations update both.
-Disconnecting the display dismisses its HUD; leaving the app also closes it.
-Select Phone / current app window to stop the separate-screen HUD.
-This is generic Android support, not a verified Pixel 10 Pro XL guarantee.
-Android must expose a presentation-capable secondary display. The app cannot
-force wired video output or turn a mirrored-only connection into a separate
-display. If none appears, use the OS external desktop/mirroring mode and open
-the app there, if supported by your phone/OS/cable/glasses combination.
+DEVICE VERIFICATION CHECKLIST (NOT AUTOMATED HARDWARE TEST RESULTS)
+On Pixel 10 Pro XL and S23:
+1. Check default black HUD; notifications/music/navigation/capture start off.
+   Toggle each module, style and Matrix; relaunch and check module persistence.
+   Resize/rotate and check readable wrapped reply panels and system insets.
+2. Connect/select glasses; change display resolution/scale if the OS permits;
+   unplug/reconnect; ensure no stale/duplicate external window. Check mirroring
+   fallback separately when Android exposes no Presentation display.
+3. Start capture; test record permission denial, projection consent cancellation,
+   Android 13 notification denial, source-policy-blocked playback and silence.
+   Then test permitted MEDIA playback. Only real levels should light the dots.
+4. Launch Gemini and start Live there. Verify external HUD survives ONLY during
+   approved capture. Do not expect capturable Gemini voice or Gemini reply text.
+   Try notification STOP, system projection stop, disable dots, audio permission
+   revoke, unplug selected display and task swipe-away; ensure capture stops.
+5. Enable notifications and grant access. Compare explicitly public content
+   with private/secret/OTP content; check filtering, 4-item bound, removal and
+   immediate module-disable clearing. Revoke access while HUD is visible and
+   while Gemini is open; verify all notification text clears.
+6. Enable music, open a player and check media-key actions; no player should
+   produce no fictional metadata. Enable navigation and test a destination with
+   spaces/Unicode; verify only a map search opens. Test missing-app handling.
+7. Confirm OpenRouter web works without a key entered in Jessica. Optional API
+   still requires authentication. Check an API reply wraps in the side box,
+   manual paste is labelled, and spoken API replies use timing-only dots when
+   playback capture is off. Notification text must never enter an API request.
+8. With shortcuts disabled, verify ordinary keyboard/control behavior. Enable
+   shortcuts, focus the phone/external HUD and test delivered DPAD/Space/Enter
+   events once per press. Verify text inputs/dialogs/buttons are unaffected and
+   volume/media keys are not hijacked. Test any glasses buttons physically;
+   absent app events or unavailable head pose must not imply hardware support.
+9. Set HUD brightness to 10%, 50% and 100% with each style, both panels and audio
+   dots visible. Verify all HUD content dims together and the background stays
+   black on phone/glasses, including during service-owned Gemini handoff. Restart
+   and check persistence; Reset must restore 100%. Controls must remain readable.
+   No hardware brightness/tint/IPD/head-tracking change should be claimed.
+10. On S23, open Samsung AI / Bixby in Jessica and HUD Settings and read/confirm
+    setup. Check that the configured assistant is invoked, including when it is
+    not Bixby. On Pixel 10 Pro XL, verify unavailable-device wording and the
+    separately labelled Standard assistant option. No Samsung transcript/API
+    integration should be implied.

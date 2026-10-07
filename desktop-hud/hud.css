@@ -2,6 +2,7 @@
 * { box-sizing: border-box; }
 html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #000000; }
 body { display: flex; flex-direction: column; padding: 4vh 5vw; }
+#hud-content { flex: 1; min-height: 0; display: flex; flex-direction: column; opacity: 0; }
 header { display: flex; justify-content: space-between; font-size: clamp(12px, 1.5vw, 28px); letter-spacing: .15em; }
 main { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 #reactor { position: relative; width: min(36vh, 35vw); height: min(36vh, 35vw); display: grid; place-items: center; }
@@ -20,3 +21,5 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; align-item
 footer { text-align: center; font-size: clamp(10px, 1vw, 18px); letter-spacing: .15em; }
 @keyframes rotate { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .ring { animation: none; } }
+.effects-paused .ring{animation-play-state:paused}
+.hidden{display:none!important}#dot-module{width:min(540px,42vw);text-align:center;margin-top:2vh}#dot-matrix{display:block;width:100%;height:auto}#dot-source{font-size:clamp(10px,1vw,18px);letter-spacing:.12em}#assistant-box{position:absolute;right:5vw;top:20vh;width:28vw;max-height:64vh;border:1px solid #66eaff;border-left-width:3px;padding:2vh 1.5vw;background:#000000}#assistant-box h2{font-size:clamp(12px,1.3vw,24px);letter-spacing:.1em;margin-top:0}#assistant-text{white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto;max-height:42vh;font-size:clamp(12px,1.3vw,24px);line-height:1.55}#assistant-state,.disclosure{font-size:clamp(9px,.8vw,16px);line-height:1.5}.with-assistant main{margin-right:34vw}.with-assistant #reactor{width:min(29vh,27vw);height:min(29vh,27vw)}.with-assistant #dot-module{width:min(450px,42vw)}#mode{margin:2vh 0}

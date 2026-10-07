@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; media-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; media-src 'self' blob:; worker-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Jessica • Desktop HUD</title>
   <link rel="stylesheet" href="style.css">
+  <script src="dot-matrix.js" defer></script>
   <script src="renderer.js" defer></script>
 </head>
 <body>
@@ -15,39 +16,71 @@
       <div class="stage-label"><span>NEURAL INTERFACE</span><span id="mode">STANDBY</span></div>
       <div class="core" id="core"><div class="orbit outer"></div><div class="orbit inner"></div><div class="reticle"></div><div class="core-text">J<span>JESSICA</span></div><div class="scanline"></div></div>
       <div class="wave" id="wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <section id="dot-module" class="dot-module"><canvas id="dot-matrix" width="540" height="156" aria-label="Assistant and local music output dot matrix"></canvas><p id="dot-source">OUTPUT / SILENT</p></section>
       <h1>Your command center.</h1><p class="intro">A focused companion for ideas, answers and live conversation.</p>
       <div class="metrics"><div><b id="provider-label">OPENROUTER</b><span>CHAT UPLINK</span></div><div><b id="live-status">OFFLINE</b><span>VOICE CHANNEL</span></div><div><b>PRIVATE KEYS</b><span>MEMORY ONLY</span></div></div>
-      <section class="live-card">
-        <div class="section-heading"><h2>SECOND-SCREEN HUD</h2><span>EXTEND MODE</span></div>
-        <label for="hud-display">Glasses / secondary display (explicit selection)</label>
-        <select id="hud-display"><option value="">Select a secondary display…</option></select>
-        <div class="key-row"><button id="hud-show" disabled>Show HUD</button><button id="hud-close" disabled>Close HUD</button></div>
-        <p id="hud-display-notice" role="status">Checking connected displays…</p>
-        <p class="warning">Windows: press Win+P and choose Extend, then identify your glasses in Display settings. No automatic XREAL detection. HUD shares only mode, provider and voice status — no conversation, keys, archive or audio. All controls stay here. Escape closes the HUD.</p>
-      </section>
-      <section class="live-card"><div class="section-heading"><h2>LIVE VOICE</h2><span>GEMINI</span></div>
-        <label for="live-model">Live model (account availability varies)</label><input id="live-model" value="gemini-3.8-live" maxlength="160">
-        <label for="gemini-key">Gemini API key</label><div class="key-row"><input id="gemini-key" type="password" placeholder="Memory only • never saved" autocomplete="off" maxlength="512"><button id="gemini-key-set">Set key</button></div>
-        <p class="warning">Opt-in microphone audio goes to Google. Gemini Live requires an eligible account/key and may incur charges. Stops on focus loss. Use headphones.</p>
-        <button class="primary" id="live-toggle">Start live • allow microphone</button>
-        <p id="live-notice" role="status">Microphone off. No background listening.</p>
-        <div id="transcript" aria-label="Live transcript"></div>
-      </section>
+      <button id="open-settings">Open central settings</button>
+      <p class="intro">Choose HUD modules, providers, Live voice, local music and navigation in Settings.</p>
       <div class="scope-note">DESKTOP EDITION / NO CAMERA / NO SPATIAL AR<br>Phone notifications and SMS are not mirrored.</div>
     </section>
     <aside class="panel">
-      <nav><button class="tab selected" data-tab="chat">CONVERSATION</button><button class="tab" data-tab="settings">UPLINK</button><button class="tab" data-tab="history">ARCHIVE</button></nav>
+      <nav><button class="tab selected" data-tab="chat">CONVERSATION</button><button class="tab" data-tab="settings">SETTINGS</button><button class="tab" data-tab="history">ARCHIVE</button></nav>
       <section class="tab-page" id="chat-page">
         <div class="section-heading"><h2>MESSAGE CHANNEL</h2><button id="new-chat">New chat</button></div>
         <div id="chat-notice" class="notice" role="status">Local app notices only. No Windows notification or SMS listener.</div>
+        <section id="assistant-box" class="assistant-box hidden"><div class="section-heading"><h2>ASSISTANT SIDE CHANNEL</h2><span id="assistant-state">STANDBY</span></div><p id="assistant-text">Waiting for a new assistant response.</p><small>OPT-IN OUTPUT ONLY / NO NOTIFICATION OR SMS MIRROR</small></section>
         <div id="messages" aria-label="Conversation" aria-live="polite"></div>
         <form id="compose"><label class="sr-only" for="prompt">Message Jessica</label><textarea id="prompt" maxlength="20000" placeholder="Ask Jessica anything… (Ctrl+Enter to send)" rows="3"></textarea><div class="compose-footer"><span id="chat-state">READY FOR INPUT</span><button type="button" id="retry">Retry</button><button type="button" id="cancel" disabled>Stop</button><button class="primary" id="send" type="submit">Send ↗</button></div></form>
         <div class="panel-footer"><button id="save-chat">Save locally</button><button id="export-chat">Export .txt</button></div>
       </section>
       <section class="tab-page hidden" id="settings-page">
-        <h2>CONFIGURE UPLINK</h2>
+        <h2>CENTRAL SETTINGS</h2>
+        <fieldset><legend>HUD modules / PC preview + glasses</legend>
+          <label class="check"><input id="module-clock" type="checkbox"> Clock</label>
+          <label class="check"><input id="module-reactor" type="checkbox"> Reactor visual</label>
+          <label class="check"><input id="module-dots" type="checkbox"> Digital DOT matrix — assistant / local music output</label>
+          <label class="check"><input id="module-assistant" type="checkbox"> Assistant side box — share new assistant replies to glasses</label>
+          <p class="warning">Side box is OFF by default. When enabled, up to the latest 1,200 characters of NEW assistant output (chat or Gemini output transcription) are shared with the display. No user prompts, archive, keys or audio are sent there. Replies may still mention sensitive information from your prompt. Disabling clears the box immediately; past replies are not replayed.</p>
+          <label class="check"><input id="speak-replies" type="checkbox"> Read completed chat replies aloud (local system voice)</label>
+          <button id="stop-speech" type="button">Stop reading</button>
+          <p class="warning">Gemini Live dots measure actual output playback, not the microphone. Chat reading shows speech activity, not amplitude; system voices may be unavailable. No capture of a Gemini phone app, browser, or other AI app's audio.</p>
+          <label class="check"><input id="hud-shortcuts" type="checkbox"> Enable focused-app keyboard / standard HID HUD controls</label>
+          <p class="warning">F8 pauses/resumes visual effects only; F9 shows/closes the explicitly selected HUD display. Active only while these PC controls are focused, outside input fields and dialogs; no global shortcuts. Glasses buttons work ONLY if their hardware/driver emits these standard keyboard keys. Brightness-only buttons may not. No generic display head/movement tracking or sensor SDK integration.</p>
+          <p id="shortcut-notice" role="status">Keyboard/HID controls off.</p>
+          <label for="hud-brightness">Glasses HUD content brightness: <output id="hud-brightness-value" for="hud-brightness">100%</output></label>
+          <input id="hud-brightness" type="range" min="10" max="100" step="1" value="100">
+          <button id="hud-brightness-reset" type="button">Reset HUD brightness to 100%</button>
+          <p class="warning">Software dim only: reduces all glasses HUD content opacity over pure black, not PC controls or the display's hardware brightness. Applied when the slider is released. Brightness, tint, IPD and movement/head tracking settings require XREAL buttons/vendor controls or a device-specific SDK; generic HDMI/DisplayPort cannot control them.</p>
+        </fieldset>
+        <fieldset><legend>Optional PC tools / no automatic actions</legend>
+          <label class="check"><input id="module-notes" type="checkbox"> Manual notes</label>
+          <label class="check"><input id="module-music" type="checkbox"> Local music player</label>
+          <label class="check"><input id="module-navigation" type="checkbox"> Navigation website launcher</label>
+          <section id="notes-module" class="hidden"><label for="manual-notes">Session-only notes (PC only; not sent to AI or glasses)</label><textarea id="manual-notes" rows="3" maxlength="2000" placeholder="Your manual reminders…"></textarea><button id="clear-notes">Clear notes</button></section>
+          <section id="music-module" class="hidden"><label for="music-files">Import local audio playlist</label><input id="music-files" type="file" multiple accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac,.webm"><label for="music-track">Track</label><select id="music-track" disabled></select><div class="tool-row"><button id="music-prev" disabled>Previous</button><button id="music-play" disabled>Play</button><button id="music-next" disabled>Next</button></div><label for="music-volume">Volume</label><input id="music-volume" type="range" min="0" max="1" step="0.05" value="0.6"><p id="music-notice" role="status">Import audio to begin. No autoplay on import.</p><p class="warning">Up to 50 files, 100 MiB each / 500 MiB total. Local playback only: cannot control Spotify or other apps. Files stay in this renderer; only a numeric output level reaches the HUD. Disabling stops playback and clears the playlist.</p></section>
+          <section id="navigation-module" class="hidden"><label for="navigation-destination">Destination (address or place)</label><input id="navigation-destination" maxlength="240" placeholder="Enter a destination"><button id="navigation-open">Open Google Maps directions</button><p class="warning">Opens your browser only after clicking. Destination is sent to Google Maps; no location capture, in-HUD turn-by-turn directions or automatic AI navigation.</p><p id="navigation-notice" role="status"></p></section>
+        </fieldset>
+        <section class="live-card">
+          <div class="section-heading"><h2>SECOND-SCREEN HUD</h2><span>EXTEND MODE</span></div>
+          <label for="hud-display">Glasses / secondary display (explicit selection)</label>
+          <select id="hud-display"><option value="">Select a secondary display…</option></select>
+          <div class="key-row"><button id="hud-show" disabled>Show HUD</button><button id="hud-close" disabled>Close HUD</button></div>
+          <p id="hud-display-notice" role="status">Checking connected displays…</p>
+          <p class="warning">Windows: press Win+P and choose Extend, then identify your glasses in Display settings. No automatic XREAL detection. The black HUD receives module switches, status, numeric output level and ONLY opted-in bounded assistant output. All controls stay here. Escape closes the HUD.</p>
+        </section>
+        <section class="live-card"><div class="section-heading"><h2>LIVE VOICE</h2><span>GEMINI API</span></div>
+          <label for="live-model">Live model (account availability varies)</label><input id="live-model" value="gemini-3.8-live" maxlength="160">
+          <label for="gemini-key">Gemini API key</label><div class="key-row"><input id="gemini-key" type="password" placeholder="Memory only • never saved" autocomplete="off" maxlength="512"><button id="gemini-key-set">Set key</button></div>
+          <p class="warning">Opt-in microphone audio goes to Google. Gemini Live requires an eligible account/key and may incur charges. Stops on focus loss. Use headphones. An installed phone Gemini app does not provide a PC audio link.</p>
+          <p class="warning">Samsung Galaxy AI/Bixby features belong to supported Samsung phones. Use the assistant on your phone; this Electron PC app does not embed those features or bridge their audio/transcripts.</p>
+          <button class="primary" id="live-toggle">Start live • allow microphone</button>
+          <p id="live-notice" role="status">Microphone off. No background listening.</p>
+          <div id="transcript" aria-label="Live transcript"></div>
+        </section>
+        <h2>CHAT UPLINK</h2>
         <label for="provider">Chat provider</label><select id="provider"><option value="openrouter">OpenRouter • free models</option><option value="groq">Groq • account free tier</option><option value="cerebras">Cerebras • account free tier</option></select>
         <p class="warning" id="provider-warning"></p>
+        <button id="openrouter-web">Open OpenRouter website — no API key entry</button><p class="warning">Separate browser chat, with the website's own account/model limits. This app's free-model API chat still requires an API key; browser audio and replies are not connected to this HUD.</p>
         <label for="provider-key">Provider API key</label><div class="key-row"><input id="provider-key" type="password" placeholder="Paste key, then Set key" autocomplete="off" maxlength="512"><button id="provider-key-set">Set key</button></div>
         <button id="clear-key">Forget this provider key</button>
         <label for="model">Model</label><select id="model"></select><button id="refresh-models">Browse live model catalog</button>

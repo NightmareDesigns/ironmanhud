@@ -5,6 +5,31 @@ const defaults = { openrouter: 'openrouter/free', groq: 'llama-3.3-70b-versatile
 let preferences, archive = [], messages = [], conversationId = crypto.randomUUID(), requestId = null, retryContext = null;
 let microphone, captureContext, playbackContext, captureNode, liveStarting = false, liveActive = false, liveGeneration = 0;
 let playbackTime = 0, playbackSources = new Set(), assistantBody;
+let playbackAnalyser, playbackSamples, speechActive = false, speechGeneration = 0;
+const matrix = window.createDotMatrix($('dot-matrix'));
+let hudRevision = 0;
+function renderHudStatus(value) {
+  if (!value?.modules || !Number.isFinite(value.level) || value.level < 0 || value.level > 1 ||
+    typeof value.assistantText !== 'string' || value.assistantText.length > 1200) return;
+  hudRevision++;
+  $('clock').classList.toggle('hidden', !value.modules.clock);
+  $('core').classList.toggle('hidden', !value.modules.reactor);
+  $('dot-module').classList.toggle('hidden', !value.modules.dots);
+  document.body.classList.toggle('effects-paused', value.effectsPaused);
+  matrix.setPaused(value.effectsPaused);
+  matrix.setEnabled(value.modules.dots);
+  matrix.setLevel(value.level);
+  $('dot-source').textContent = value.audioSource === 'SPEECH' ? 'CHAT / SPEECH ACTIVITY (NOT AMPLITUDE)' :
+    `OUTPUT / ${value.audioSource}${value.audioSource === 'SILENT' ? '' : ' / PLAYBACK LEVEL'}`;
+  $('assistant-box').classList.toggle('hidden', !value.modules.assistant);
+  $('assistant-text').textContent = value.modules.assistant ?
+    value.assistantText || 'Waiting for a new assistant response.' : '';
+  $('assistant-state').textContent = value.assistantPending ? 'RECEIVING CHAT' :
+    value.assistantSource !== 'NONE' ? `${value.assistantSource} / LATEST` : value.mode === 'LIVE LINK' ? 'LIVE OUTPUT' : 'STANDBY';
+}
+api.onHudStatus(renderHudStatus);
+const initialHudRevision = hudRevision;
+void api.readHudStatus().then(value => { if (hudRevision === initialHudRevision) renderHudStatus(value); });
 const notices = (message, error = false) => { $('chat-notice').textContent = message; $('chat-notice').classList.toggle('error', error); };
 const settingNotice = message => { $('settings-notice').textContent = message; };
 let displayRevision = 0, displayBusy = false, currentDisplays;
@@ -68,6 +93,7 @@ function tab(name) {
   document.querySelectorAll('.tab-page').forEach(page => page.classList.toggle('hidden', page.id !== `${name}-page`));
 }
 document.querySelectorAll('.tab').forEach(button => button.addEventListener('click', () => tab(button.dataset.tab)));
+$('open-settings').addEventListener('click', () => tab('settings'));
 function renderMessages() {
   $('messages').replaceChildren();
   assistantBody = null;
@@ -87,7 +113,7 @@ function renderMessages() {
   if (!messages.length) {
     const greeting = document.createElement('article');
     greeting.className = 'message';
-    greeting.textContent = 'Hello. I’m Jessica. Configure a provider and memory-only API key in Uplink, then send your first command.';
+    greeting.textContent = 'Hello. I’m Jessica. Configure a provider and memory-only API key in Settings, then send your first command.';
     $('messages').append(greeting);
   }
   $('messages').scrollTop = $('messages').scrollHeight;
@@ -108,6 +134,8 @@ function visual() {
   $('mode').textContent = liveActive ? 'LIVE LINK' : requestId ? 'PROCESSING' : 'STANDBY';
 }
 function resetChat() {
+  stopReading();
+  void api.clearAssistant();
   messages = [];
   retryContext = null;
   conversationId = crypto.randomUUID();
@@ -118,6 +146,220 @@ async function persistPreferences() {
   const result = await api.preferences(preferences);
   if (result.error) settingNotice(result.error);
 }
+function applyModules() {
+  if (!preferences) return;
+  for (const [name, enabled] of Object.entries(preferences.modules)) $('module-' + name).checked = enabled;
+  $('speak-replies').checked = preferences.speakReplies;
+  $('hud-shortcuts').checked = preferences.hudShortcuts;
+  $('hud-brightness').value = String(preferences.hudBrightness);
+  $('hud-brightness-value').textContent = `${preferences.hudBrightness}%`;
+  $('shortcut-notice').textContent = preferences.hudShortcuts ? 'F8: pause/resume FX · F9: show/close selected HUD · focused PC app only.' : 'Keyboard/HID controls off.';
+  for (const name of ['notes', 'music', 'navigation']) $(`${name}-module`).classList.toggle('hidden', !preferences.modules[name]);
+  if (!preferences.modules.notes) $('manual-notes').value = '';
+  if (!preferences.modules.navigation) $('navigation-destination').value = '';
+  if (!preferences.modules.music) clearMusic();
+  if (!preferences.speakReplies) stopReading();
+  if (!preferences.modules.assistant) {
+    $('assistant-text').textContent = '';
+    $('assistant-box').classList.add('hidden');
+  }
+}
+for (const name of ['clock', 'reactor', 'dots', 'assistant', 'notes', 'music', 'navigation']) {
+  $('module-' + name).addEventListener('change', async () => {
+    if (!preferences) return;
+    preferences.modules[name] = $('module-' + name).checked;
+    applyModules();
+    await persistPreferences();
+  });
+}
+$('speak-replies').addEventListener('change', async () => {
+  if (!preferences) return;
+  preferences.speakReplies = $('speak-replies').checked;
+  applyModules();
+  await persistPreferences();
+});
+$('hud-shortcuts').addEventListener('change', async () => {
+  if (!preferences) return;
+  preferences.hudShortcuts = $('hud-shortcuts').checked;
+  applyModules();
+  await persistPreferences();
+});
+$('hud-brightness').addEventListener('input', () => {
+  $('hud-brightness-value').textContent = `${$('hud-brightness').value}%`;
+});
+$('hud-brightness').addEventListener('change', async () => {
+  if (!preferences) return;
+  const brightness = Number($('hud-brightness').value);
+  if (!Number.isInteger(brightness) || brightness < 10 || brightness > 100) return;
+  preferences.hudBrightness = brightness;
+  await persistPreferences();
+});
+$('hud-brightness-reset').addEventListener('click', async () => {
+  if (!preferences) return;
+  preferences.hudBrightness = 100;
+  $('hud-brightness').value = '100';
+  $('hud-brightness-value').textContent = '100%';
+  await persistPreferences();
+});
+document.addEventListener('keydown', event => {
+  if (!preferences?.hudShortcuts || !document.hasFocus() || event.repeat || event.isComposing ||
+    event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !['F8', 'F9'].includes(event.key) ||
+    (event.key === 'F9' && displayBusy) ||
+    document.activeElement?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]') ||
+    document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')) return;
+  event.preventDefault();
+  if (event.key === 'F9') void displayAction(() => api.hudShortcut({ action: 'toggle-hud' }));
+  else void api.hudShortcut({ action: 'toggle-fx' }).then(result => {
+    $('shortcut-notice').textContent = result.error || (result.effectsPaused ? 'Visual effects paused. Audio continues. F8 resumes.' : 'Visual effects resumed.');
+  });
+});
+$('clear-notes').addEventListener('click', () => { $('manual-notes').value = ''; });
+$('openrouter-web').addEventListener('click', async () => {
+  const result = await api.openWebsite({ site: 'openrouter' });
+  settingNotice(result.error || 'Opened OpenRouter in your browser. Website chat is separate from this app.');
+});
+$('navigation-open').addEventListener('click', async () => {
+  const destination = $('navigation-destination').value.trim();
+  if (!destination) { $('navigation-notice').textContent = 'Enter an address or place first.'; return; }
+  const result = await api.openWebsite({ site: 'maps', destination });
+  $('navigation-notice').textContent = result.error || 'Opened Google Maps in your browser. No directions are tracked in this app.';
+});
+function stopReading() {
+  speechGeneration++;
+  speechActive = false;
+  window.speechSynthesis?.cancel();
+  if (preferences?.speakReplies) void api.outputLevel({ source: 'speech', level: 0 });
+}
+function speakReply(content) {
+  if (!preferences.speakReplies || liveActive || liveStarting || !content) return;
+  if (!window.speechSynthesis || typeof SpeechSynthesisUtterance !== 'function') {
+    notices('Chat complete. Local speech is unavailable on this system.'); return;
+  }
+  const voices = window.speechSynthesis.getVoices().filter(voice => voice.localService);
+  const voice = voices.find(item => item.lang.toLowerCase() === navigator.language.toLowerCase()) || voices[0];
+  if (!voice) { notices('Chat complete. No local system voice is available yet; read the text reply instead.'); return; }
+  stopReading();
+  const generation = speechGeneration;
+  const utterance = new SpeechSynthesisUtterance(content.slice(0, 20000));
+  utterance.voice = voice;
+  utterance.onstart = utterance.onresume = () => { if (generation === speechGeneration) speechActive = true; };
+  utterance.onend = utterance.onpause = () => { if (generation === speechGeneration) speechActive = false; };
+  utterance.onerror = event => {
+    if (generation !== speechGeneration) return;
+    speechActive = false;
+    if (!['canceled', 'interrupted'].includes(event.error)) notices('Chat complete. Local speech voice unavailable; read the text reply instead.');
+  };
+  window.speechSynthesis.speak(utterance);
+}
+$('stop-speech').addEventListener('click', stopReading);
+window.speechSynthesis?.getVoices();
+const musicAudio = new Audio();
+musicAudio.preload = 'none';
+let playlist = [], trackIndex = 0, musicContext, musicAnalyser, musicSamples, musicGain, musicRevision = 0;
+function updateMusicUI() {
+  const available = playlist.length > 0;
+  $('music-track').disabled = !available;
+  $('music-play').disabled = !available;
+  $('music-prev').disabled = $('music-next').disabled = playlist.length < 2;
+  $('music-play').textContent = musicAudio.paused ? 'Play' : 'Pause';
+}
+function clearMusic() {
+  musicRevision++;
+  musicAudio.pause();
+  musicAudio.removeAttribute('src');
+  musicAudio.load();
+  for (const track of playlist) URL.revokeObjectURL(track.url);
+  playlist = [];
+  $('music-files').value = '';
+  $('music-track').replaceChildren();
+  $('music-notice').textContent = 'Import audio to begin. No autoplay on import.';
+  updateMusicUI();
+  void api.outputLevel({ source: 'music', level: 0 });
+}
+function selectTrack(index) {
+  if (!playlist.length) return;
+  musicRevision++;
+  musicAudio.pause();
+  trackIndex = (index + playlist.length) % playlist.length;
+  musicAudio.src = playlist[trackIndex].url;
+  $('music-track').value = String(trackIndex);
+  $('music-notice').textContent = playlist[trackIndex].name;
+  updateMusicUI();
+}
+async function playMusic() {
+  if (!preferences?.modules.music || !playlist.length) return;
+  const revision = musicRevision;
+  try {
+    if (!musicContext) {
+      musicContext = new AudioContext();
+      musicGain = musicContext.createGain();
+      musicGain.gain.value = Number($('music-volume').value);
+      musicAnalyser = musicContext.createAnalyser();
+      musicAnalyser.fftSize = 1024;
+      musicSamples = new Float32Array(musicAnalyser.fftSize);
+      musicContext.createMediaElementSource(musicAudio).connect(musicGain).connect(musicAnalyser).connect(musicContext.destination);
+    }
+    await musicContext.resume();
+    if (revision !== musicRevision || !preferences.modules.music) return;
+    await musicAudio.play();
+  } catch {
+    if (revision === musicRevision) $('music-notice').textContent = 'Audio could not play. Try a supported MP3, WAV or OGG file and press Play.';
+  }
+  updateMusicUI();
+}
+$('music-files').addEventListener('change', () => {
+  const files = [...$('music-files').files];
+  if (!preferences?.modules.music) return;
+  if (!files.length) return;
+  if (files.length > 50 || files.some(file => file.size > 100 * 1024 * 1024 ||
+    !(file.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac|flac|webm)$/i.test(file.name))) ||
+    files.reduce((total, file) => total + file.size, 0) > 500 * 1024 * 1024) {
+    $('music-files').value = '';
+    $('music-notice').textContent = 'Choose up to 50 audio files, each ≤100 MiB and ≤500 MiB total. Existing playlist unchanged.';
+    return;
+  }
+  clearMusic();
+  playlist = files.map(file => ({ name: file.name.slice(0, 240), url: URL.createObjectURL(file) }));
+  playlist.forEach((track, index) => {
+    const option = document.createElement('option');
+    option.value = String(index); option.textContent = track.name; $('music-track').append(option);
+  });
+  selectTrack(0);
+});
+$('music-track').addEventListener('change', () => {
+  const playing = !musicAudio.paused;
+  selectTrack(Number($('music-track').value));
+  if (playing) void playMusic();
+});
+$('music-play').addEventListener('click', () => {
+  if (musicAudio.paused) void playMusic();
+  else { musicRevision++; musicAudio.pause(); updateMusicUI(); }
+});
+for (const [id, offset] of [['music-prev', -1], ['music-next', 1]]) {
+  $(id).addEventListener('click', () => {
+    const playing = !musicAudio.paused;
+    selectTrack(trackIndex + offset);
+    if (playing) void playMusic();
+  });
+}
+$('music-volume').addEventListener('input', () => { if (musicGain) musicGain.gain.value = Number($('music-volume').value); });
+musicAudio.addEventListener('ended', () => {
+  if (trackIndex + 1 < playlist.length) { selectTrack(trackIndex + 1); void playMusic(); }
+  else { $('music-notice').textContent = 'Playlist complete. Press Play to replay the last track.'; updateMusicUI(); }
+});
+musicAudio.addEventListener('error', () => { if (playlist.length) $('music-notice').textContent = 'Unsupported or unreadable audio. Choose another track.'; });
+musicAudio.addEventListener('play', updateMusicUI);
+musicAudio.addEventListener('pause', updateMusicUI);
+function outputRMS(analyser, samples, context) {
+  if (!analyser || !samples || context?.state !== 'running') return 0;
+  analyser.getFloatTimeDomainData(samples);
+  return Math.min(1, Math.sqrt(samples.reduce((sum, sample) => sum + sample * sample, 0) / samples.length) * 4);
+}
+const outputTimer = setInterval(() => {
+  if (liveActive) void api.outputLevel({ source: 'gemini', level: playbackSources.size ? outputRMS(playbackAnalyser, playbackSamples, playbackContext) : 0 });
+  if (preferences?.modules.music) void api.outputLevel({ source: 'music', level: !musicAudio.paused ? outputRMS(musicAnalyser, musicSamples, musicContext) : 0 });
+  if (preferences?.speakReplies) void api.outputLevel({ source: 'speech', level: speechActive ? 1 : 0 });
+}, 100);
 function providerUI() {
   $('provider').value = preferences.provider;
   $('provider-label').textContent = preferences.provider.toUpperCase();
@@ -218,6 +460,7 @@ async function submit(context) {
   if (requestId) return;
   const input = $('prompt').value.trim();
   if (!context && !input) return;
+  stopReading();
   const base = context || [...messages, { role: 'user', content: input }];
   if (base.length > 59 || base.reduce((n, m) => n + m.content.length, 0) > 80000) {
     notices('Conversation limit reached. Save/export, then start a new chat.', true); return;
@@ -249,11 +492,13 @@ api.onChat(event => {
     if (assistantBody) assistantBody.textContent = messages.at(-1).content;
     $('messages').scrollTop = $('messages').scrollHeight;
   } else {
+    const reply = event.type === 'done' ? messages.at(-1)?.content : '';
     requestId = null;
     if (event.type === 'done') retryContext = null;
     busy(false);
     notices(event.message, event.type === 'error');
     renderMessages();
+    if (reply) speakReply(reply);
   }
 });
 function snapshot() { return { id: conversationId, provider: preferences.provider, model: preferences.model, messages: messages.filter(m => m.content) }; }
@@ -273,7 +518,7 @@ function renderHistory() {
   $('history').replaceChildren();
   const query = $('search').value.toLowerCase();
   const selected = archive.filter(c => c.messages.some(m => m.content.toLowerCase().includes(query)));
-  if (!selected.length) $('history').textContent = 'No matching saved chats. Enable local saving in Uplink to build an archive.';
+  if (!selected.length) $('history').textContent = 'No matching saved chats. Enable local saving in Settings to build an archive.';
   for (const chat of selected) {
     const item = document.createElement('article');
     item.className = 'history-item';
@@ -291,6 +536,8 @@ function renderHistory() {
       preferences.model = chat.model;
       await persistPreferences();
       providerUI();
+      stopReading();
+      await api.clearAssistant();
       conversationId = chat.id;
       messages = chat.messages.map(m => ({ ...m }));
       retryContext = null;
@@ -313,6 +560,7 @@ function clearPlayback() {
   for (const source of playbackSources) { try { source.stop(); } catch {} }
   playbackSources.clear();
   playbackTime = 0;
+  if (liveActive) void api.outputLevel({ source: 'gemini', level: 0 });
 }
 async function releaseAudio() {
   liveGeneration++;
@@ -326,6 +574,7 @@ async function releaseAudio() {
   clearPlayback();
   const contexts = [captureContext, playbackContext];
   captureContext = playbackContext = undefined;
+  playbackAnalyser = playbackSamples = undefined;
   await Promise.all(contexts.filter(Boolean).map(context => context.close().catch(() => {})));
   $('live-toggle').textContent = 'Start live • allow microphone';
   $('live-toggle').disabled = false;
@@ -339,6 +588,7 @@ async function stopVoice() {
 async function startVoice() {
   if (liveStarting || liveActive) { await stopVoice(); return; }
   if (!window.confirm('Allow microphone audio to be sent to Google Gemini Live now? Your account may be billed. The session stops when this window loses focus.')) return;
+  stopReading();
   liveStarting = true;
   const generation = ++liveGeneration;
   $('live-toggle').textContent = 'Stop connecting';
@@ -349,6 +599,10 @@ async function startVoice() {
     microphone = stream;
     captureContext = new AudioContext();
     playbackContext = new AudioContext({ sampleRate: 24000 });
+    playbackAnalyser = playbackContext.createAnalyser();
+    playbackAnalyser.fftSize = 1024;
+    playbackSamples = new Float32Array(playbackAnalyser.fftSize);
+    playbackAnalyser.connect(playbackContext.destination);
     await captureContext.audioWorklet.addModule('mic-worklet.js');
     if (generation !== liveGeneration) return;
     captureNode = new AudioWorkletNode(captureContext, 'pcm-capture');
@@ -416,7 +670,7 @@ api.onLive(event => {
       const output = buffer.getChannelData(0);
       for (let i = 0; i < output.length; i++) output[i] = view.getInt16(i * 2, true) / 32768;
       const source = playbackContext.createBufferSource();
-      source.buffer = buffer; source.connect(playbackContext.destination);
+      source.buffer = buffer; source.connect(playbackAnalyser);
       playbackTime = Math.max(playbackTime, playbackContext.currentTime);
       source.start(playbackTime); playbackTime += buffer.duration;
       playbackSources.add(source);
@@ -431,7 +685,14 @@ window.addEventListener('blur', () => {
   }
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden) void stopVoice(); });
-window.addEventListener('beforeunload', () => { microphone?.getTracks().forEach(track => track.stop()); });
+window.addEventListener('beforeunload', () => {
+  microphone?.getTracks().forEach(track => track.stop());
+  clearInterval(outputTimer);
+  stopReading();
+  clearMusic();
+  matrix.destroy();
+  void musicContext?.close();
+});
 setInterval(() => { $('clock').textContent = new Date().toLocaleTimeString(); }, 1000);
 async function initialize() {
   const state = await api.initialize();
@@ -439,6 +700,7 @@ async function initialize() {
   archive = state.chats;
   $('live-model').value = preferences.liveModel;
   $('save-history').checked = preferences.saveChats;
+  applyModules();
   providerUI(); renderMessages(); renderHistory(); busy(false);
 }
 void initialize();
