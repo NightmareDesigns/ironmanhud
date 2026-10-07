@@ -1,0 +1,17 @@
+{
+  "name": "desktop-hud",
+  "version": "1.0.0",
+  "description": "Jessica local AI desktop console",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "check": "node --check main.js && node --check preload.js && node --check renderer.js && node --check local-ai.js && node --check voice.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "44.6.0"
+  }
+}

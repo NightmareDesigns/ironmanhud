@@ -75,7 +75,8 @@ camera passthrough. System/window chrome depends on Samsung DeX.
 Target device: S23 with Samsung DeX. Physical XREAL 1S compatibility must be
 tested on your setup; this repository cannot certify display behavior.
 Pixel desktop/external-display behavior needs separate testing; it isn't DeX.
-PC-native support is not included.
+This Android app does not run on PC. For the separate Jessica PC console,
+see ../desktop-hud/SETUP.txt (local AI and Windows voice chat).
 
 PIXEL / SECONDARY-DISPLAY MODE
 No DeX clone is necessary to display a single HUD app. Connect a supported

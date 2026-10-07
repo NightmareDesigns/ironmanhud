@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Jessica — Nightmare Suite</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="renderer.js" defer></script>
+</head>
+<body>
+  <header>
+    <div><h1>JESSICA</h1><p>Nightmare Suite · local AI console</p></div>
+    <button id="settings-open">⚙ Settings</button>
+  </header>
+  <main>
+    <section class="toolbar" aria-label="Chat controls">
+      <span id="connection">Local AI</span>
+      <button id="clear">New chat</button>
+      <button id="export">Export chat</button>
+      <button id="stop">Stop request / audio</button>
+    </section>
+    <p id="status" role="status" aria-live="polite">Starting…</p>
+    <section id="chat" role="log" aria-label="Conversation" aria-live="polite"></section>
+    <form id="compose">
+      <label for="message">Message Jessica</label>
+      <textarea id="message" rows="3" maxlength="16000" placeholder="Type here, or use the microphone. Ctrl+Enter to send."></textarea>
+      <div class="toolbar">
+        <button type="button" id="listen">🎙 Speak (15 seconds)</button>
+        <button type="button" id="read">Read last reply</button>
+        <button type="submit" id="send">Send</button>
+      </div>
+    </form>
+    <footer>Local connections only. Mic activates only when clicked. Chat stays in memory unless exported.</footer>
+  </main>
+  <dialog id="settings-dialog">
+    <form id="settings-form">
+      <h2>Jessica settings</h2>
+      <fieldset>
+        <legend>Local AI connection</legend>
+        <label for="provider">Provider</label>
+        <select id="provider">
+          <option value="ollama">Ollama</option>
+          <option value="lmstudio">LM Studio</option>
+          <option value="nightmare">Nightmare Suite (OpenAI-compatible API)</option>
+        </select>
+        <label for="endpoint">Local API base URL</label>
+        <input id="endpoint" type="url" maxlength="2048" placeholder="http://127.0.0.1:1234/v1">
+        <p>Ollama: server root. LM Studio / Nightmare Suite: base URL including /v1 if required. Only loopback addresses are allowed.</p>
+        <label for="model">Model ID</label>
+        <input id="model" list="model-list" maxlength="256">
+        <datalist id="model-list"></datalist>
+        <label for="session-key">Optional local server token (memory only)</label>
+        <input id="session-key" type="password" maxlength="4096" autocomplete="off">
+        <button id="models" type="button">Save & test connection / list models</button>
+        <p id="settings-status" role="status" aria-live="polite"></p>
+      </fieldset>
+      <fieldset>
+        <legend>Personality and generation</legend>
+        <label for="prompt">Jessica system prompt</label>
+        <textarea id="prompt" rows="3" maxlength="8000"></textarea>
+        <div class="grid">
+          <label>Temperature (0–2)<input id="temperature" type="number" min="0" max="2" step="0.1"></label>
+          <label>Reply token limit<input id="maxTokens" type="number" min="1" max="8192" step="1"></label>
+          <label>Timeout (seconds)<input id="timeout" type="number" min="5" max="600" step="1"></label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Windows voice chat</legend>
+        <label class="check"><input id="spokenReplies" type="checkbox">Speak Jessica's replies</label>
+        <label class="check"><input id="autoSendVoice" type="checkbox">Send recognized speech immediately (otherwise review in the message box)</label>
+        <label for="voice">Installed Windows voice</label>
+        <select id="voice"><option value="">Windows default</option></select>
+        <button id="voices" type="button">Refresh installed voices</button>
+        <div class="grid">
+          <label>Speech rate (−10–10)<input id="rate" type="number" min="-10" max="10" step="1"></label>
+          <label>Volume (0–100)<input id="volume" type="number" min="0" max="100" step="1"></label>
+        </div>
+        <p>Uses Windows System.Speech, not Narrator automation. Install a Windows speech language and allow desktop microphone access. No always-on listening.</p>
+      </fieldset>
+      <fieldset>
+        <legend>Appearance</legend>
+        <label for="theme">HUD accent</label>
+        <select id="theme"><option value="cyan">Stark cyan</option><option value="matrix">Matrix green</option><option value="amber">Amber</option></select>
+        <label for="fontSize">Chat text size</label>
+        <input id="fontSize" type="number" min="12" max="24" step="1">
+      </fieldset>
+      <div class="toolbar">
+        <button id="settings-close" type="button">Close</button>
+        <button id="settings-save" type="submit">Save settings</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

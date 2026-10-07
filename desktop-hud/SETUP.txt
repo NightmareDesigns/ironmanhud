@@ -1,0 +1,66 @@
+JESSICA PC CONSOLE — Nightmare Suite / LM Studio / Ollama
+
+This new Electron app is separate from the Android and Unity projects.
+It runs typed chat on Windows, Linux and macOS; speech requires Windows.
+There is no installer or prebuilt Windows executable in this change.
+
+START
+Install Node.js 22 or newer. In the desktop-hud directory:
+  npm ci
+  npm start
+Checks:
+  npm run check
+  npm test
+
+LOCAL AI
+Ollama: start Ollama, install a model (for example ollama pull llama3.1:8b).
+Select Ollama in Settings. Default base URL: http://127.0.0.1:11434.
+LM Studio: load a chat model and start the local API server in Developer.
+Select LM Studio. Default base URL: http://127.0.0.1:1234/v1.
+Nightmare Suite: enable its OpenAI-compatible local chat API, if it has one,
+then enter that API's actual base URL and model ID. This repository contains
+no Nightmare Suite API contract; a proprietary/non-OpenAI API is not supported.
+There is no guessed Nightmare Suite port or automatic process launch.
+Use Save & test connection / list models, then choose a model ID and Save.
+This button saves the connection settings even if the connection check fails.
+The Model field accepts a returned ID or a manually entered ID.
+Each provider keeps its own endpoint/model. Changing connections clears context.
+Only localhost, 127.0.0.1 and [::1] HTTP(S) endpoints are supported.
+Redirects and remote/LAN endpoints are rejected. HTTPS needs a trusted certificate.
+Optional API tokens stay in process memory and must be reentered after restart.
+Clear the token when switching to a different local server if it is not needed.
+
+TWO-WAY VOICE
+Speak captures one utterance using Windows System.Speech (up to 15 seconds),
+then puts the transcription in the message box for review. Auto-send is opt-in.
+Spoken replies and Read last reply use installed Windows desktop/SAPI voices,
+the same Windows speech infrastructure family as accessibility services,
+not automation of Narrator. No cloud TTS service or speech dependency is added.
+Choose Refresh installed voices, voice, rate and volume in Settings.
+Narrator/OneCore-only voices might not be exposed by System.Speech.
+Enable Windows Settings > Privacy & security > Microphone > desktop app access.
+Install a speech language in Windows language settings and configure your
+default microphone. Recognition uses the installed default speech language.
+Windows PowerShell 5.1 and .NET Framework System.Speech must be available.
+If script execution is blocked by policy, consult your Windows administrator;
+the app does not bypass execution policy.
+Text chat remains usable when speech is unavailable.
+Stop request / audio cancels local requests and terminates active speech.
+Mic is never always on; the app does not listen while Jessica speaks.
+Physical Windows microphone, voice, and playback testing is still required.
+
+SETTINGS AND PRIVACY
+Tune system prompt, temperature, reply length, timeout, colors and chat size.
+Settings are saved in Electron's per-user application data folder/settings.json.
+Tokens, transcripts and audio are never saved automatically. Do not put secrets
+in the system prompt or endpoint; those settings are persisted in plain text.
+Chat is limited to 200 visible/exportable messages; the last 40 plus your new
+message go to the selected model. New chat clears the conversation context.
+Unsent input is retained after failed requests. Ctrl+Enter sends typed input.
+Export chat writes a plain-text transcript only after you choose a destination.
+All messages go to your selected local service. That service can log them or
+forward them elsewhere: verify its own privacy settings. The app does not send
+raw microphone recordings to the model. Windows handles speech locally.
+AI text is displayed as text, never executed or rendered as HTML. There is no
+filesystem, shell, clipboard, or autonomous tool access for Jessica responses.
+Closing the app cancels requests and voice; history and tokens are discarded.
