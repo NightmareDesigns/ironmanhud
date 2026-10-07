@@ -1,0 +1,107 @@
+JESSICA HUD - WINDOWS PC EDITION
+
+BUILD AND LAUNCH
+GitHub Actions: run the workflow named "Build Jessica DeX APK".
+The Windows packaging job waits for the Android APK job to succeed.
+When the workflow completes, download Jessica-Windows-x64 alongside
+Jessica-DeX-APK from the workflow run's Artifacts section.
+Extract Jessica-Windows-x64 and launch JessicaHUD.exe from its portable
+folder. Jessica-DeX-APK is the separate Android phone build, not a PC app.
+
+Requires Node.js 22.12+ and npm. From desktop-hud:
+  npm ci
+  npm start
+  npm run package:win
+
+The Windows x64 portable app is produced in:
+  dist/JessicaHUD-win32-x64/JessicaHUD.exe
+Copy the ENTIRE JessicaHUD-win32-x64 folder to a Windows PC, then launch
+JessicaHUD.exe. Keep resources and the other runtime files alongside it.
+This is a portable application folder, not a single-file installer.
+The build is unsigned; Windows SmartScreen may show an unknown-publisher warning.
+Only run builds from a source you trust. The package requires Windows 10 or later.
+Packaging Windows on Linux downloads the official Electron Windows runtime.
+Development npm start also works on Electron-supported Linux and macOS.
+Linux development needs a display and correctly configured Chromium sandbox;
+if its sandbox helper permissions are invalid, fix those permissions rather
+than launching with --no-sandbox. Windows does not use that Linux helper.
+Never disable Electron sandboxing or web security in a distributed build.
+
+CHAT UPLINK
+Open Uplink. Select OpenRouter, Groq or Cerebras. Enter the matching API key
+and press Set key. Keys exist only in application memory and are forgotten
+when the application closes. They are not saved, exported or printed.
+Use Forget this provider key to remove a key before closing.
+
+Browse live model catalog fetches directly from the selected provider.
+OpenRouter shows only models whose prompt AND completion prices are zero
+and whose IDs end in :free, plus openrouter/free. The free router selects
+an eligible free model. Availability, quotas and upstream providers change.
+Only free model IDs can be requested through this app's OpenRouter path.
+Groq and Cerebras require their own account/API key. Their free tiers are
+account-dependent and limited, not an assurance that all usage is free.
+Check provider account plans, usage quotas and billing before sending.
+An exact Groq/Cerebras model ID can be entered when the catalog is unavailable.
+No API credential or paid account is bundled.
+
+Text responses stream live. Stop cancels a request; Retry resends the failed
+turn, excluding the incomplete assistant response. Retrying can consume quota.
+Changing provider explicitly asks for confirmation and clears current context.
+No previous chat is silently forwarded to another provider.
+Opening saved history from a different provider also asks for confirmation.
+Messages are sent directly to the selected provider, not a Jessica server.
+Treat your conversation content as data shared with that provider.
+
+LOCAL HISTORY
+Saving is OFF by default. Enable it in Uplink, then press Save locally.
+At most 20 chats are retained, each at most 60 turns/100,000 characters.
+Active chat history is bounded; start a new chat when its limit is reached.
+Archive supports local search, opening and deletion. Disabling local saving
+erases the app's saved archive. Export uses an explicit system save dialog
+to write plain text to your chosen location. Exported files are not erased
+by deleting an archive entry. Live audio/transcripts are not archived.
+Only preferences and opted-in saved chat text are persisted in
+Electron's userData/preferences.json (normally under Windows %APPDATA%).
+These files are NOT encrypted. Do not save sensitive chat on shared PCs.
+
+GEMINI LIVE VOICE
+Enter a Google Gemini API key and press Set key in Live Voice.
+Default model ID: gemini-3.8-live. It is editable because account/region/model
+availability varies. Use a Live AUDIO-capable model supported by your account;
+if this default is unavailable, use the model ID shown by Google's documentation.
+Gemini Live needs an eligible Google account/API key, model access and may
+require billing. Free access is not guaranteed. Check Google's current pricing.
+Click Start live and explicitly consent to microphone use and transmission.
+The PC needs a working microphone, speaker/headphones and system microphone
+permission. No audio is captured on launch; there is no background listener.
+Audio is PCM16 mono at 16 kHz input and 24 kHz output over the official Google
+Live WebSocket endpoint. Input/output transcription appears when provided by
+the model. Use headphones to prevent acoustic feedback.
+Stop Live, window focus loss, minimization, disconnect or exit stops capture.
+Sessions have a 15-minute safety limit; manually restart to continue.
+Provider keys remain in memory; Live never reuses a chat-provider key.
+The official socket authenticates using the Gemini key in its connection URL;
+the app never logs that URL. Avoid sharing network diagnostic captures.
+This app has no reconnect/autoresume: a fresh explicit start is required.
+
+SCOPE AND LIMITS
+The message side panel shows conversations and LOCAL application notices.
+It is not a Windows OS notification listener, SMS listener or phone mirror.
+A PC cannot mirror your phone notifications through this app.
+No camera capture, spatial AR, floating real-world overlays or phone-device
+integration is implemented. This is an interactive desktop HUD window.
+No background microphone, arbitrary remote URLs, external navigation, popups,
+plugins or automatic tool execution are allowed.
+Network requests have timeouts and bounded responses/audio queues.
+Provider errors are sanitized: check your account console for account details.
+Never paste your API key into a chat message or transcript.
+
+VALIDATION
+  node --check main.js
+  node --check preload.js
+  node --check renderer.js
+  node --check mic-worklet.js
+  npm audit
+  npm run package:win
+Live authenticated provider calls require your own accounts and are not
+performed during build. Packaging output is ignored by Git.

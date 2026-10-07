@@ -68,6 +68,7 @@ public final class MainActivity extends Activity {
     private final java.util.LinkedHashMap<String, String> messageFeed = new java.util.LinkedHashMap<>();
     private String transcript = "Jessica ready. Configure OpenRouter to chat.\n";
     private TextView chatText;
+    private TextView chatDisclosure;
     private Button pollButton;
     private AlertDialog chatDialog;
     private Presentation externalPresentation;
@@ -295,7 +296,8 @@ public final class MainActivity extends Activity {
         if (chatDialog != null && chatDialog.isShowing()) return;
         LinearLayout content = column();
         content.setPadding(dp(16), dp(8), dp(16), dp(8));
-        content.addView(label("Text is sent to " + provider + "/model providers. Voice uses your installed speech service."));
+        chatDisclosure = label("Text is sent to " + provider + "/model providers. Voice uses your installed speech service.");
+        content.addView(chatDisclosure);
         chatText = label(transcript);
         chatText.setTextIsSelectable(true);
         ScrollView messages = new ScrollView(this);
@@ -347,7 +349,7 @@ public final class MainActivity extends Activity {
         scroll.addView(content);
         chatDialog = new AlertDialog.Builder(this).setTitle("Jessica")
                 .setView(scroll).setPositiveButton("Close", null).create();
-        chatDialog.setOnDismissListener(dialog -> { chatText = null; pollButton = null; });
+        chatDialog.setOnDismissListener(dialog -> { chatText = null; chatDisclosure = null; pollButton = null; });
         chatDialog.show();
     }
 
@@ -425,6 +427,8 @@ public final class MainActivity extends Activity {
                 failedPrompt = null;
             }
             provider = selectedProvider;
+            if (chatDisclosure != null) chatDisclosure.setText("Text is sent to " + provider
+                    + "/model providers. Voice uses your installed speech service.");
             apiKey = key;
             model = selected;
             speak = spoken.isChecked();
@@ -643,7 +647,14 @@ public final class MainActivity extends Activity {
                     .put("text", transcript).put("messages", messages)
                     .put("time", System.currentTimeMillis());
             JSONArray bounded = new JSONArray().put(snapshot);
-            for (int i = 0; i < Math.min(chats.length(), 9); i++) bounded.put(chats.get(i));
+            int size = snapshot.toString().length() + 2;
+            for (int i = 0; i < Math.min(chats.length(), 9); i++) {
+                Object previous = chats.get(i);
+                int addition = previous.toString().length() + 1;
+                if (size + addition > 500000) break;
+                bounded.put(previous);
+                size += addition;
+            }
             getPreferences(MODE_PRIVATE).edit().putString("conversations", bounded.toString()).apply();
             toast("Saved on this device (up to 10 snapshots).");
         } catch (org.json.JSONException exception) { toast("Could not save this conversation."); }
@@ -664,7 +675,8 @@ public final class MainActivity extends Activity {
             String query = search.getText().toString().toLowerCase(Locale.ROOT);
             for (int i = 0; i < Math.min(chats.length(), 10); i++) {
                 JSONObject item = chats.optJSONObject(i);
-                if (item == null || !item.optString("text").toLowerCase(Locale.ROOT).contains(query)) continue;
+                if (item == null || !(item.optString("title") + "\n" + item.optString("text"))
+                        .toLowerCase(Locale.ROOT).contains(query)) continue;
                 visible.add(item);
                 titles.add(item.optString("title", "Chat") + "\n"
                         + new java.util.Date(item.optLong("time")));

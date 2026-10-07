@@ -77,6 +77,8 @@ final class HudView extends View {
         messagesEnabled = enabled;
         messages.clear();
         messages.addAll(feed);
+        setContentDescription("Animated reactor HUD; clock, battery and Jessica status"
+                + (enabled ? ". Live messages: " + (messages.isEmpty() ? "waiting" : String.join(". ", messages)) : ""));
         invalidate();
     }
 

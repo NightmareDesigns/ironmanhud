@@ -2,6 +2,10 @@ plugins {
     id 'com.android.application'
 }
 
+dependencies {
+    implementation 'com.squareup.okhttp3:okhttp:5.3.2'
+}
+
 android {
     namespace 'com.nightmaredesigns.dexhud'
     compileSdk 35

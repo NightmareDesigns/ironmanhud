@@ -20,6 +20,10 @@ From the dex-hud directory run:
   ./gradlew :app:lintDebug :app:assembleDebug
 On Windows use gradlew.bat instead. Set ANDROID_HOME to your Android SDK.
 Output: app/build/outputs/apk/debug/app-debug.apk
+The same workflow packages the Windows x64 desktop HUD only after Android
+lint/build succeeds. Its artifact is Jessica-Windows-x64; extract the whole
+folder and launch JessicaHUD.exe. See desktop-hud/SETUP.txt for PC details.
+PC packaging is independent of Unity; phone notification access is Android-only.
 
 DEX AND CONTROLS
 Connect the XREAL display to the S23, enter Samsung DeX, then open Jessica HUD
@@ -105,6 +109,27 @@ They are never sent to any AI, saved with chats or included in chat exports.
 Anyone viewing your phone/glasses can read them. Messages > Disable / clear
 stops the panel; revoke notification access in Android Settings to remove the
 system grant too. Background monitoring and automatic replies are not provided.
+
+GEMINI LIVE / VISUAL VOICE SESSION
+Open Gemini Live from the HUD (or say "Jessica Gemini Live"). This is a separate
+real-time Gemini Developer API session, not OpenRouter chat or Android TTS.
+Enter your own Google AI Studio key and a supported Live model. Default:
+gemini-3.8-live. The model is editable because access and availability change.
+Allow microphone permission, then explicitly press Start. The app sends mono
+16 kHz PCM microphone audio to Google and plays returned 24 kHz PCM audio.
+The visual panel shows live microphone/speaker activity, connection status and
+transcription when the model supplies it. This does not show generated video,
+camera frames or screen capture, and does not read the message panel.
+Use headphones to reduce echo. Stop, leaving the screen, audio-focus loss,
+connection errors or the 10-minute safety limit end the session and close audio.
+There is no automatic reconnect. Re-enter the key to start another session.
+Keys and the bounded Live transcript stay in memory only; the key input is
+cleared on Start or leaving the screen. Live transcripts are not saved/exported
+with ordinary Jessica chats. Google receives microphone audio during a session.
+Google project/region/model quotas and billing apply: API access is not funded
+by a Gemini app subscription or OpenRouter credits. Free usage is not guaranteed.
+This personal-test client uses a user-entered key. A distributed production
+client should use a backend-issued ephemeral token instead of bundling a key.
 
 POLLING AND PRIVACY
 Enter a text prompt, select Start polling and confirm. The prompt and recent

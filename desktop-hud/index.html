@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; media-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jessica • Desktop HUD</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="renderer.js" defer></script>
+</head>
+<body>
+  <header><div class="brand"><span class="brand-icon">J</span><div>JESSICA <small>PERSONAL INTELLIGENCE / DESKTOP</small></div></div><div class="top-status"><span class="led"></span> LOCAL SYSTEM ONLINE <time id="clock"></time></div></header>
+  <main>
+    <section class="stage">
+      <div class="stage-label"><span>NEURAL INTERFACE</span><span id="mode">STANDBY</span></div>
+      <div class="core" id="core"><div class="orbit outer"></div><div class="orbit inner"></div><div class="reticle"></div><div class="core-text">J<span>JESSICA</span></div><div class="scanline"></div></div>
+      <div class="wave" id="wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <h1>Your command center.</h1><p class="intro">A focused companion for ideas, answers and live conversation.</p>
+      <div class="metrics"><div><b id="provider-label">OPENROUTER</b><span>CHAT UPLINK</span></div><div><b id="live-status">OFFLINE</b><span>VOICE CHANNEL</span></div><div><b>PRIVATE KEYS</b><span>MEMORY ONLY</span></div></div>
+      <section class="live-card"><div class="section-heading"><h2>LIVE VOICE</h2><span>GEMINI</span></div>
+        <label for="live-model">Live model (account availability varies)</label><input id="live-model" value="gemini-3.8-live" maxlength="160">
+        <label for="gemini-key">Gemini API key</label><div class="key-row"><input id="gemini-key" type="password" placeholder="Memory only • never saved" autocomplete="off" maxlength="512"><button id="gemini-key-set">Set key</button></div>
+        <p class="warning">Opt-in microphone audio goes to Google. Gemini Live requires an eligible account/key and may incur charges. Stops on focus loss. Use headphones.</p>
+        <button class="primary" id="live-toggle">Start live • allow microphone</button>
+        <p id="live-notice" role="status">Microphone off. No background listening.</p>
+        <div id="transcript" aria-label="Live transcript"></div>
+      </section>
+      <div class="scope-note">DESKTOP EDITION / NO CAMERA / NO SPATIAL AR<br>Phone notifications and SMS are not mirrored.</div>
+    </section>
+    <aside class="panel">
+      <nav><button class="tab selected" data-tab="chat">CONVERSATION</button><button class="tab" data-tab="settings">UPLINK</button><button class="tab" data-tab="history">ARCHIVE</button></nav>
+      <section class="tab-page" id="chat-page">
+        <div class="section-heading"><h2>MESSAGE CHANNEL</h2><button id="new-chat">New chat</button></div>
+        <div id="chat-notice" class="notice" role="status">Local app notices only. No Windows notification or SMS listener.</div>
+        <div id="messages" aria-label="Conversation" aria-live="polite"></div>
+        <form id="compose"><label class="sr-only" for="prompt">Message Jessica</label><textarea id="prompt" maxlength="20000" placeholder="Ask Jessica anything… (Ctrl+Enter to send)" rows="3"></textarea><div class="compose-footer"><span id="chat-state">READY FOR INPUT</span><button type="button" id="retry">Retry</button><button type="button" id="cancel" disabled>Stop</button><button class="primary" id="send" type="submit">Send ↗</button></div></form>
+        <div class="panel-footer"><button id="save-chat">Save locally</button><button id="export-chat">Export .txt</button></div>
+      </section>
+      <section class="tab-page hidden" id="settings-page">
+        <h2>CONFIGURE UPLINK</h2>
+        <label for="provider">Chat provider</label><select id="provider"><option value="openrouter">OpenRouter • free models</option><option value="groq">Groq • account free tier</option><option value="cerebras">Cerebras • account free tier</option></select>
+        <p class="warning" id="provider-warning"></p>
+        <label for="provider-key">Provider API key</label><div class="key-row"><input id="provider-key" type="password" placeholder="Paste key, then Set key" autocomplete="off" maxlength="512"><button id="provider-key-set">Set key</button></div>
+        <button id="clear-key">Forget this provider key</button>
+        <label for="model">Model</label><select id="model"></select><button id="refresh-models">Browse live model catalog</button>
+        <label for="custom-model">Model ID (Groq / Cerebras)</label><input id="custom-model" placeholder="Exact model ID from provider" maxlength="160"><button id="apply-model">Apply model</button>
+        <label class="check"><input id="save-history" type="checkbox"> Opt in to local saved conversations</label>
+        <p class="warning">Off by default. Saved chats are plain text in this computer's app-data folder (20 chats maximum). Disabling erases this app's saved archive. Keys are never saved; switching provider requires confirmation and clears current context.</p>
+        <p id="settings-notice" role="status"></p>
+      </section>
+      <section class="tab-page hidden" id="history-page">
+        <h2>LOCAL ARCHIVE</h2><label for="search">Search saved conversations</label><input id="search" type="search" placeholder="Search local text"><div id="history"></div>
+      </section>
+    </aside>
+  </main>
+  <footer><span>JESSICA HUD / PC 01</span><span>16 kHz INPUT • 24 kHz OUTPUT / ENCRYPTED UPLINK</span><span>YOUR CONTEXT. YOUR CONTROL.</span></footer>
+</body>
+</html>

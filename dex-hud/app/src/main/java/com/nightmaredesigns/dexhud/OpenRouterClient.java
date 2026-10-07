@@ -244,8 +244,10 @@ final class OpenRouterClient {
             case "Cerebras": base = "https://api.cerebras.ai/v1/"; break;
             default: throw failure("Choose OpenRouter, Groq, or Cerebras.");
         }
-        if (key == null || key.isEmpty() || key.length() > 4096
-                || !key.matches("[A-Za-z0-9._~+/-]+=*")) {
+        boolean publicCatalog = "OpenRouter".equals(provider) && "models".equals(path)
+                && (key == null || key.trim().isEmpty());
+        if (!publicCatalog && (key == null || key.isEmpty() || key.length() > 4096
+                || !key.matches("[A-Za-z0-9._~+/-]+=*"))) {
             throw failure("Enter a valid API key for the selected provider (without spaces).");
         }
         if (cancelled == null) throw failure("Request cancellation is unavailable.");
@@ -260,7 +262,7 @@ final class OpenRouterClient {
         current.setUseCaches(false);
         current.setConnectTimeout(15000);
         current.setReadTimeout(45000);
-        current.setRequestProperty("Authorization", "Bearer " + key);
+        if (!publicCatalog) current.setRequestProperty("Authorization", "Bearer " + key);
         synchronized (connectionLock) {
             try {
                 check(request);

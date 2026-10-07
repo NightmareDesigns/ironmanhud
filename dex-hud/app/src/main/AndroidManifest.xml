@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <queries>
         <intent>
             <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
@@ -14,6 +15,18 @@
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:usesCleartextTraffic="false"
         android:supportsRtl="true">
+        <service
+            android:name=".LiveMessageService"
+            android:label="Jessica live messages"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+        <activity
+            android:name=".GeminiLiveActivity"
+            android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
