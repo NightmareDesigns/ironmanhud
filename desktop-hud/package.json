@@ -5,6 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "build:win": "electron-packager . Jessica --platform=win32 --arch=x64 --out=dist --overwrite --no-asar --ignore=\"^/(dist|local-ai\\.test\\.js|package-lock\\.json)$\"",
     "test": "node --test",
     "check": "node --check main.js && node --check preload.js && node --check renderer.js && node --check local-ai.js && node --check voice.js"
   },
@@ -12,6 +13,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@electron/packager": "20.3.0",
     "electron": "44.6.0"
   }
 }

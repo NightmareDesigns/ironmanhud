@@ -2,12 +2,33 @@ JESSICA PC CONSOLE — Nightmare Suite / LM Studio / Ollama
 
 This new Electron app is separate from the Android and Unity projects.
 It runs typed chat on Windows, Linux and macOS; speech requires Windows.
-There is no installer or prebuilt Windows executable in this change.
+Windows builds produce a portable app, not an installer.
 
-START
+TRY THE WINDOWS BUILD (NO NODE.JS REQUIRED)
+1. On GitHub open Actions > Build Jessica Windows.
+2. Select the completed successful run for the branch containing these changes.
+   If the run needs approval, approve it first; no download exists until it
+   succeeds. You can also use Run workflow once the workflow is available on
+   the default branch, selecting the branch you want to build.
+3. Under Artifacts, download Jessica-Windows-x64 (sign into GitHub if needed).
+4. Extract the entire ZIP to a folder, then double-click Jessica.exe.
+   Keep all DLLs, resources and other files beside the EXE. Do not run it inside
+   the ZIP or copy just the EXE. START-HERE.txt is included in the download.
+5. Start Ollama / LM Studio / your local API and choose it in Jessica Settings.
+Requires Windows 10 or newer, x64. No Node.js or Unity installation is needed.
+This is an unsigned personal-test build. Windows may show a SmartScreen warning;
+check that the download came from your own repository's successful build.
+Artifacts expire after 14 days; run the workflow again for a fresh download.
+
+DEVELOPER START / BUILD
 Install Node.js 22 or newer. In the desktop-hud directory:
   npm ci
   npm start
+Build the same portable Windows folder from source:
+  npm run build:win
+Output: desktop-hud/dist/Jessica-win32-x64/Jessica.exe
+The build bundles Electron and includes voice.ps1 as a real file (no ASAR), so
+Windows PowerShell can load it. Only the build machine needs Node.js.
 Checks:
   npm run check
   npm test
