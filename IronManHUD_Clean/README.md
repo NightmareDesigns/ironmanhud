@@ -47,6 +47,11 @@ apiKey = "YOUR_OPENWEATHERMAP_API_KEY"  // Get free key at openweathermap.org
 - File → Build Settings → Android → **Build And Run**
 - Put on Xreal glasses → USB-C to phone
 
+### GitHub Actions APK Artifact
+- Add a `UNITY_LICENSE` repository secret containing your Unity license. Add `UNITY_EMAIL` and `UNITY_PASSWORD` secrets if your license activation requires them.
+- Run **Build Android APK** from the repository's Actions tab, or push a change under `IronManHUD_Clean/`.
+- Download `IronManHUD-Android-APK` from the completed workflow run.
+
 ## Voice Commands
 
 | Command | Action |
